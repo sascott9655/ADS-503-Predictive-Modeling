@@ -4,5 +4,305 @@ author: "Sam Scott"
 date: "2026-05-09"
 output: html_document
 ---
+
 #Set our work directory to be in our ADS-503 module
-setwd("C:/Users/samsc/Desktop/ADS-503/Module1")
+setwd("C:/Users/samsc/Desktop/ADS-503/ADS-503-Predictive-Modeling")
+
+
+```{r}
+
+xn <- c(1,2,3) # numeric vector
+yn = c(1,2,3)
+
+str(xn) # structure of the R object
+print(str(xn)) # apparently the structure of the R object is NULL
+class(xn) #numeric class
+
+xc <- c('a', 'b', 'c') # character vector
+str(xc)
+class(xc)
+
+xm <- matrix(1:20, nrow=5, ncol=4) #matrix of size 20 having 5 rows and 4 columns like so
+# 0 1 2 3 4
+# 5 6 7 8 9
+# 10 11 12 13 14
+# 15 16 17 18 19
+
+# I was wrong about the structure it is 
+ #[,1] [,2] [,3] [,4]
+#[1,]    1    6   11   16
+#[2,]    2    7   12   17
+#[3,]    3    8   13   18
+#[4,]    4    9   14   19
+#[5,]    5   10   15   20
+
+xm # so matrices in R populate the row first then the columns 
+# also R starts with 1 and Python starts with 0 so R matrix in this 
+# example 
+
+?matrix #question mark helps you get information on a topic
+# in this case we want to get information on the matrix topic
+
+populate_cols_first <- matrix(1:20, nrow=5, ncol=4, byrow=TRUE) #byrow default is false. This parameter tells you how the matrix will be populated. If True populate cols first otherwise populate rows first
+populate_cols_first 
+
+str(populate_cols_first)
+class(populate_cols_first)
+
+?list
+?exp
+x1 <- list(a = 1:10, beta = exp(-3:3), logic = c(TRUE, FALSE,FALSE, TRUE)) #my guess is x1 has three different lists. the first one (a) is 
+# a standard list populating 1 to 10 with 1 row and 10 columns. The 
+# beta list is a list of the exponents of 3s (not sure) and the logic list is a boolean mask list of itself?
+
+x1$a #$ is used to return single columns
+
+
+x1[2] #gets the beta list which is a list of exp values from -3 to 3
+# so exp(-x) = 1/exp(x) so exp(3) does not equal exp(-3)
+
+x1[[2]]
+
+str(x1)
+class(x1)
+?letters #built in constant to putting letters in a list
+?rep
+#Dataframes
+xd1 <- data.frame(x = 1:10, y = letters[1:10], z= rep(c(TRUE, FALSE), 5), stringsAsFactors = FALSE) 
+# x create a dataframe 1 to 10 single row 10 columns
+# y is the same as x
+# z not sure what rep does
+# stringsASFactors make sure that no string types are factor types or
+# discrete variables
+
+str(xd1)
+
+# x creates a dataframe 1 to 10 single row 10 columns
+# y creates a letter dataframe first 10 letters in lowercase single row 10 columns
+# z creates the (TRUE FALSE) vector we made 5 times so 10 total values
+# single row 10 columns
+
+head(xd1)
+
+##   x y     z
+## 1 1 a  TRUE
+## 2 2 b FALSE
+## 3 3 c  TRUE
+## 4 4 d FALSE
+## 5 5 e  TRUE
+## 6 6 f FALSE
+
+names(xd1) # names of columns in data frame
+#[1] "x" "y" "z"
+
+dim(xd1) # dimension of data frame
+
+# 10 rows by 3 columns
+
+nrow(xd1) # number of rows of data frame
+#10
+
+ncol(xd1) # number of cols of data frame
+#3
+
+xd1[1, ] #first row
+
+xd1[, 1] # first column
+
+xd1[2, 3] # second row third column
+
+xd1[, c("y", "z")] # dataframe columns y and z
+
+xd1[xd1$x > 5, ] # subset data frame
+# this will essentially give you a dataframe with value greater than 5
+# in the x column
+#:
+# 6, f, FALSE
+# 7, g, TRUE
+# 8, h, FALSE
+# 9, i, TRUE
+# 10, j, FALSE
+# DONT FORGET IMPLIED INDEX WITH DATAFRAMES!!!!!
+
+xds <- subset(xd1, x > 5) # subset data frame using subset function
+xds # same as line 116 
+
+subset(xd1, x > 5 & z == TRUE) #get values greater than 5 in the x #column and also get the values that are set to TRUE in the z column
+
+xds1 <- subset(xd1, x > 5, select = c(x,y)) # subset and select data frame
+# my assumption is that this will return x and y columns that are greater than 5 in x column
+
+xds2 <- subset(xd1, x>5, select = -z) 
+# returns everything that is not the z column greater than 5 in x column. In other words xds2 = xds1
+
+```
+#Reading and writing files in R
+```{r}
+
+getwd() #get working directory
+setwd("C:/Users/samsc/Desktop/ADS-503/ADS-503-Predictive-Modeling")
+cereals <- read.csv("C:/Users/samsc/Desktop/ADS-503/ADS-503-Predictive-Modeling/cereals.CSV")
+str(cereals)
+
+cereals2 <- read.csv("C:/Users/samsc/Desktop/ADS-503/ADS-503-Predictive-Modeling/cereals.CSV", stringsAsFactors = FALSE)
+str(cereals2)
+
+write.csv(xds2, file= 'xds2.csv') #Creating a csv
+
+
+```
+#Apply functions in R
+```{r}
+data(cars)
+head(cars)
+cars
+
+dim(cars) # dimensions of cars data set
+
+apply(cars, 1, mean) # row mean
+#row 1: (4 + 2) / 2
+#row 2: (4 + 10)/ 2
+#row 3: (7 + 4)/ 2
+#etcetera...
+
+apply(cars, 2, mean) # column mean
+
+?airquality # Daily air quality measurements in New York, May to September 1973
+
+data(airquality)
+head(airquality)
+
+?lapply 
+aq_class <- lapply(airquality, class) # get class of each column in the dataframe
+aq_class
+
+#numeric is float and integer is integer
+
+aq_mean <- lapply(airquality, mean) #get mean of each column in the dataframe
+aq_mean
+
+aq_mean_cleaned <- lapply(airquality, mean, na.rm= TRUE) # get mean of each column in the data frame with NA's removed
+aq_mean_cleaned
+
+airquality_s <- airquality[, lapply(airquality, class) == 'integer'] #subset data frame using lapply function
+#this should remove the wind section which is of type numeric while the rest of the categories are integers
+
+?sapply #simplified version of lapply?
+
+sapply(airquality, function(x) sum(is.na(x))) #using sapply to find NA's
+
+aq_mean_cleaned_vector <- sapply(airquality, mean, na.rm = TRUE)
+aq_mean_cleaned_vector
+
+names(aq_mean_cleaned_vector) #column names of data set
+
+```
+#Some useful functions in R for module 1
+
+``` {r}
+data(iris)
+str(iris)
+
+
+pairs(iris) # pairwise scatter plots
+
+cor(iris)  # correlation between predictors, this will give error because the fifth columns our target
+#variable is classification variable which is nonnumeric it is string or factor
+
+cor(iris[,-5]) # correlation, removes the target variable from correlation
+
+boxplot(iris)
+
+?par #query graph parameters
+??mfrow
+
+par(mfrow = c(1,2)) #draw two plots side by side 1 row 2 columns
+boxplot(iris$Sepal.Length ~ iris$Species)
+boxplot(iris$Sepal.Width ~ iris$Species)
+
+par(mfrow = c(1,3)) 
+hist(iris$Sepal.Length)
+hist(iris$Sepal.Width)
+hist(iris$Petal.Length)
+
+install.packages("Hmisc")
+library(Hmisc)
+
+
+hist.data.frame(iris) #get the whole graphical info of each attribute
+
+hist.data.frame(airquality) #very cool function
+
+
+```
+#Box Cox Transformations
+#Boxcox transformations are used to transform a predictor variable with non-normal distribution into predictor with normal distribution.
+```{r}
+set.seed(20)
+?rgamma #non-normal distribution graph
+x <- rgamma(1000, 2)
+hist(x)
+
+library(e1071)
+skewness(x) #1.155639 recall skewness?
+
+y <- rnorm(1000)
+hist(y)
+skewness(y) #0.05625155
+
+library(caret)
+
+bct <- BoxCoxTrans(x)
+x_trans <- predict(bct, x)
+hist(x_trans)
+skewness(x_trans) #-0.1014337
+
+z <- c(x, 0)
+bct2 <- BoxCoxTrans(z)
+z <- z + 10^-4
+bct2 <- BoxCoxTrans(z)
+bct
+```
+#PCA 
+#It is commonly used for dimensionality reduction by projecting each data point onto only the first few principal components to obtain lower-dimensional data while preserving as much of the data’s variation as possible.
+
+#Principal components are directions that have maximum variance when data is projected onto them and at the same time are uncorrelated with each other.
+
+#Principal components are linear combinations of original predictors.
+
+# Example 1
+
+set.seed(100)
+?rnorm
+x <- rnorm(1000)
+y <- rnorm(1000)
+z <- rnorm(1000)
+
+m <- matrix(data= c(x,y,z), nrow = 1000, ncol = 3)
+
+m_pca <- prcomp(m) #pca method prcomp
+str(m_pca)
+
+m_pca_var <- m_pca$sdev^2 #we get pca variance to #because that is PCA's goal when reducing dimension, #get the most variance of the data
+m_pca_var * 100/sum(m_pca_var) #checking to see how #much of that variance pca got
+
+??rotation
+ 
+m_pca_var
+m_pca$rotation #how strongly each variable is contributing via loadings or weights
+
+m_pca$x[1:20,] 
+
+#Example 2
+t <- (x + y + z)/3
+m1 <- matrix(data = c(x,y,z,t), nrow = 1000, ncol = 4)
+
+m1_pca <- prcomp(m1)
+m1_pca_var <-m1_pca$sdev^2
+m1_pca_var * 100/sum(m1_pca_var)
+
+?biplot #a type of exploratory graph used in multivariate statistics to visualize both the observations (samples) and #variables (features) of a data matrix simultaneously
+biplot(m1_pca, scale=0) #plots numbers between 1 and 1000
+biplot(m1_pca, choices = 2:3, scale = 0)
+
+
