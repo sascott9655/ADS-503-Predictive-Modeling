@@ -1,0 +1,8 @@
+---
+title: "R_Data_Types"
+author: "Sam Scott"
+date: "2026-05-09"
+output: html_document
+---
+#Set our work directory to be in our ADS-503 module
+setwd("C:/Users/samsc/Desktop/ADS-503/Module1")

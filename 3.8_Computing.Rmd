@@ -1,0 +1,98 @@
+---
+title: "3.8_Computing"
+author: "Sam Scott"
+date: "2026-05-07"
+output: html_document
+---
+
+install.packages("AppliedPredictiveModeling")
+
+apropos("confusion")
+RSiteSearch("confusion", restrict="functions")
+
+library(AppliedPredictiveModeling)
+data(segmentationOriginal)
+
+segData <- subset(segmentationOriginal, Case == "Train")
+
+cellID <- segData$Cell #the dollar sign is used to return single columns
+class <- segData$Class
+case <- segData$Case
+#Now remove the column
+segData <- segData[, -(1:3)] #now cell class and case are not in the dataset no more
+
+#removing dummy variable Status columns
+dim(segData)
+statusColNum <- grep("Status", names(segData))
+statusColNum
+class(statusColNum)
+
+#Remove status columns from dataset
+segData <-segData[, -statusColNum]
+dim(segData)
+
+#seeing skewness in data using e1071 package
+library(e1071)
+#skewness of one predictor
+skewness(segData$AngleCh1)
+
+#Since predictors are all numeric, the apply function can be applied har har har
+skewValues <- apply(segData, 2, skewness) #apply(array/matrix, margin(1 for row, 2 for #column), function that is applied to data)
+head(skewValues)
+
+#Find appropriate transformation
+library(caret)
+Ch1AreaTrans <- BoxCoxTrans(segData$AreaCh1)
+
+#Seeing the result of the transformation
+predict(Ch1AreaTrans, head(segData$AreaCh1))
+
+#prcomp base R function can be used for PCA
+pcaObject <- prcomp(segData, center=TRUE, scale.=TRUE)
+
+#Calculate the cumulative percentage of variance which each component
+#accounts for. 
+percentVariance <- pcaObject$sd^2/sum(pcaObject$sd^2) * 100 #get the variance percent #of each variable to see where PCA might work first (might be already sorted?!)
+
+head(pcaObject$x[, 1:5])
+#$x -> scores
+#$rotation -> loadings 
+
+head(pcaObject$rotation[, 1:3]) #loadings are close to 0, not affecting the values #much
+
+#to administer a series of transformations to multiple data sets, the caret class
+#preProcess has the ability to transform, center, scale, or impute values. 
+trans <- preProcess(segData,method=c("BoxCox", "center", "scale", "pca"))
+trans
+
+#apply transformation, values will be different since they occured prior to PCA
+transformed <- predict(trans, segData)
+head(transformed[, 1:5])
+
+#filtering near-zero predictors
+nearZeroVar(segData)
+#When predictors should be removed, a vector of integers is returned that
+#indicates which columns should be removed. 
+
+correlations <- cor(segData)
+dim(correlations)
+correlations[1:4, 1:4]
+
+library(corrplot)
+corrplot(correlations, order="hclust")
+
+
+#findCorrelation function will return the column numbers recommend for deletion
+#to avoid multicollinearity
+
+highCorr <- findCorrelation(correlations, cutoff =.75)
+length(highCorr)
+
+highCorr
+
+#use dummy variables when working with tree-based models
+library(caret)
+data(cars)
+
+head(cars)
+
