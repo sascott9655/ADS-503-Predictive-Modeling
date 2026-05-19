@@ -1,0 +1,429 @@
+---
+title: "M2-A1"
+author: "Sam Scott"
+date: "2026-05-18"
+output: html_document
+---
+
+```{r warning=FALSE, message=FALSE}
+suppressPackageStartupMessages(library(tidyverse))
+
+library(caret)
+library(tidyverse)
+library(scales)
+library(mlbench)
+library(AppliedPredictiveModeling)
+library(gt)
+library(corrplot)
+library(xfun)
+```
+
+## Problem 2.1 (20 points)
+
+The soybean data can also be found at the UC Irvine Machine Learning Repository. Data were collected to predict disease in 683 soybeans. The 35 predictors are mostly categorical and include information on the environmental conditions (e.g., temperature, precipitation) and plant conditions (e.g., left spots, mold growth). The outcome labels consist of 19 distinct classes. The data can be loaded via: 
+
+```{r}
+data(Soybean)
+soy <- Soybean[, -1]
+Class <- Soybean[, 1]
+```
+
+### 2.1.a (10 points)
+
+**Investigate missing values for all the predictors, which predictors have the highest and the lowest number of missing values?**
+
+```{r}
+soy_missing <- sapply(soy, function(x) sum(is.na(x)))
+
+#In R, the primary way to sort data is through the sort() function, which is used for vectors. For more complex data structures like data frames, you typically use order() or the dplyr package's arrange() function
+
+sort(soy_missing, decreasing = TRUE)
+```
+
+**The highest amount of missing values is hail, sever, seed.tmt, and lodging with 121 missing values. The 
+lowest number of missing values is Class and leaves with 0 missing values.**
+
+**Do the missing values depend on the outcome labels (summarize NAs by class)?**
+
+**Hint**: `complete.cases(df)` will return a vector of TRUE/FALSE (if all values are present). You are trying to determine whether you can infer something about the `Class` for an an observation, given that one of the predictor values is missing.
+
+```{r}
+complete.cases(soy[1:50,]) #Show first fifty samples  
+```
+
+- Since the FALSE values determine where the NA values are,
+it can be inferred that NA values are determined by their class type. This is
+because the results of complete.cases(soy) have clumps or multiple
+number of FALSE values in a row and since the data set has many instances of 
+the same classification, it can be inferred that Class Type is a reason
+for the NA values.
+-Yes, the missing values are heavily dependent on the type of class disease the 
+soybean plant has, as only 5 out of the 19 classes have NA values. This must
+mean that information on certain diseases are more difficult to come by so
+there must be some relation between NAs showing up due to the type of Class.\*
+
+**Are any of the distributions degenerate in the ways discussed earlier in chapter 3?**
+
+```{r}
+#A column is degenerate if the column has zero variance, and/or only has one 
+#unique value per column 
+
+check_degenerate <- nearZeroVar(soy)
+
+#This function determines which rows has NA values.Then those row Class values
+#are counted and then a table is returned to see which Class values contributes
+#to missing data
+
+soy_mask_func <- function(soy) {
+  soy_mask <- complete.cases(soy)
+  soy_mask <- Class[soy_mask == FALSE]
+  table(soy_mask)
+}
+
+sort(soy_mask_func(soy)) #shows the summarize NA values by class 
+```
+
+-  Three of the columns in the soy data set are considered degenerate.\*
+
+### 2.1.b (10 points)
+
+**Compute what % of the predictor data is missing?**
+
+```{r}
+percent_soy_missing <- round(mean(is.na(soy)) * 100, 2)
+percent_soy_missing 
+```
+
+**Compute percent of missing data by outcome label and identify classes with highest percent missing values. An example of this calculation: if there are two predictors and 10 rows of data with 5 missing data points then % missing = 5 \* 100 / (2\*10) = 25%**
+
+```{r}
+class_percent_missing <- sapply(soy, function(z) round(mean(is.na(z)) * 100, 2))
+sort(class_percent_missing, decreasing = TRUE)
+```
+
+## Problem 2.2 (10 points)
+
+The caret package contains a QSAR data set from Mente and Lombardo (2005). Here, the ability of a chemical to permeate the blood-brain barrier was experimentally determined for 208 compounds. 134 descriptors were measured for each compound.
+
+### 2.2.a Load the data:
+
+```{r 2-2-a}
+data(BloodBrain)
+```
+
+The numeric outcome is contained in the vector `logBBB` while the predictors are in the data frame `bbbDescr`.
+
+### 2.2.b (5 points)
+
+**Do any of the individual predictors have degenerate distributions?**
+
+```{r}
+check_degenerate2 <- nearZeroVar(bbbDescr)
+length(check_degenerate2)
+```
+
+7 of the individual predictors have degenerate distributions.
+
+### 2.2.c (5 points)
+
+**Generally speaking, are there strong relationships between the predictor data?**
+
+```{r}
+correlations <-cor(bbbDescr)
+correlations[1:4,1:4]
+corrplot(correlations, order = 'hclust') #hierarchical clustering
+```
+There are definitely some correlations in our data set. The hierarchical 
+clustering does a good job at displaying correlations that are high and low. The
+extreme correlations are graphed in blue (strongly positive) and red (strongly 
+negative), while clear color show little to zero correlation. 
+
+**If so, how could correlations in the predictor set be reduced?**
+The correlations in the predictor set can be reduced by using the 
+findCorrelation function which can remove the abs value of correlations with
+a method called cutoff. Generally correlations equal or above the abs of 0.75
+are considered strong correlations.
+
+```{r}
+?findCorrelation
+highCorr <- findCorrelation(correlations, cutoff = .75)
+length(highCorr) #66 correlations that are over the abs value of .75 are removed
+
+filteredBloodData <- bbbDescr[, -highCorr] #remove highly correlated predictors
+
+correlationsFiltered <- cor(filteredBloodData)
+corrplot(correlationsFiltered, order="hclust")
+```
+
+**Does this have a dramatic effect on the number of predictors available for modeling?**
+
+Yes, 66 high correlations were removed from the data set and with our
+hierarchical clustering corrplot we are able to distinguish the highly 
+correlated clusters that were removed, showing that they were probably
+signs of multicollinearity. 
+
+## Problem 2.3 (10 points)
+
+Consider the permeability data set described in Sect. 1.4. of the textbook. The objective for this data is to use the predictors to model compounds “permeability”.
+
+```{r}
+data(permeability) # this creates two matrices fingerprints and permeability 
+permeabilitydf <- as_tibble(fingerprints) |> 
+    mutate(permeability = permeability) 
+```
+
+### 2.3.a (5 points)
+
+**What data splitting method(s) would you use for these data? Explain.**
+
+Since the column name of the permeabilitydf are named X(n) with n being the 
+number of the column, I would use a simple random sample method to randomly
+choose what data goes into my training and test splits.The difference between
+X9 and X456 is not significant to make sure that certain columns go in either
+a test split or training split.
+
+### 2.3.b (5 points)
+
+**Using tools described in this chapter, provide code for implementing your approach(es).**
+
+```{r}
+set.seed(503) 
+?sample
+#x = either a vector of one of more elements from which to choose, or a 
+#positive integer
+#n = 	a positive number, the number of items to choose from
+#size	= a non-negative integer giving the number of items to choose.
+#replace = should sampling be with replacement?
+trainingRows <- sample(nrow(permeabilitydf), 0.8 * nrow(permeabilitydf))
+
+permeabilityTrain <- permeabilitydf[trainingRows,]
+permeabilityTest <- permeabilitydf[-trainingRows,]
+
+
+```
+
+## Problem 2.4 (20 points)
+
+Partial least squares was used to model the yield of a chemical manufacturing process (Sect. 1.4). The data can be found in the AppliedPre- dictiveModeling package and can be loaded using:
+
+```{r}
+data(ChemicalManufacturingProcess) 
+```
+
+The objective of this analysis is to find the number of PLS components that yields the optimal R^2^ value. PLS models with 1 through 10 components were each evaluated using five repeats of 10-fold cross-validation and the results are presented in the following table:
+
+```{r}
+#| echo: false
+pca_table <- tibble(
+    Components = 1:10,
+    Mean = c(0.444, 0.500, 0.533, 0.545, 0.542, 
+                    0.537, 0.534, 0.534, 0.520, 0.507),
+    `Std. Error` = c(0.0272, 0.0298, 0.0302, 0.0308, 0.0322, 
+                   0.0327, 0.0333, 0.0330, 0.0326, 0.0324)
+)
+
+gt(pca_table) |> 
+    tab_header(title = md("Resampled R<sup>2</sup>")) |> 
+    tab_options(
+        data_row.padding = px(2),    # Specifically target data rows for more compactness
+  )
+
+```
+
+### 2.4.a (7 points)
+
+**Using the “one-standard error” method, what number of PLS components provides the most parsimonious model?**
+
+In the Resampled R^2 table, the Components that give the highest mean is 
+principal component 4. The mean value is 0.545 and the std error is 0.0308. 
+If we convert the values to percents by multiplying the values by 100, you get
+54.5% and 3.08% respectively. To find the simplest model, using the
+one standard error method, we subtract the mean  from the std error and get the
+difference of 51.42%. Looking at the table,principal components amount of 3
+still maintains a mean higher than 51.42% while being computationally less
+expensive. Therefore the amount PLs components that provides the most
+parsimonious model, is 3 PLS components.
+
+### 2.4.b (7 points)
+
+**If a 10% loss in optimal R2 is acceptable, then what is the optimal number of PLS components?**
+If 10% lost is acceptable then the optimal number of PLS would be 54.5 - 10.0 
+which would be 44.5 percent. Looking at our 1 principal component analysis is 
+barely not enough so the optimal number of PLS components is 2.
+
+
+### 2.4.c (3 points)
+
+**Several other models with varying degrees of complexity were trained and tuned and the results are presented in Figure below. If the goal is to select the model that optimizes R^2^, then which model(s) would you choose, and why?**
+
+![](M2-A2-image-Q4_1.png)
+
+### 2.4.d (3 points)
+
+**Prediction time, as well as model complexity are other factors to consider when selecting the optimal model(s). Given each model’s prediction time, model complexity, and R2 estimates, which model(s) would you choose, and why?**
+
+(Both questions I answered in the paragraph below)
+
+
+The models that I would choose would be Random Forests and SVM as they give the
+best R^2 values relative to the 95% Confidence Interval. Out of the two models
+I would say that SVM is the overall the best model, as computation time is still
+relatively fast compared to the other models. Random Forest on the other hand,
+has high computational time as it would take around 2 more minutes to train its 
+model to get its results. If based solely on accuracy Random Forest, but overall
+best model with least amount of trade offs, I would say SVM. 
+
+
+## Problem 2.5 (30 points)
+
+Brodnjak-Vonina et al. (2005) develop a methodology for food laboratories to determine the type of oil from a sample. In their procedure, they used a gas chromatograph (an instrument that separates chemicals in a sample) to measure seven different fatty acids in an oil. These measurements would then be used to predict the type of oil in a food sample. To create their model, they used 96 samples of seven types of oils.
+
+These data can be found in the `caret` package using `data(oil)`. The oil types are contained in a factor variable called `oilType`. The types are pumpkin (coded as A), sunflower (B), peanut (C), olive (D), soybean (E), rapeseed (F) and corn (G).
+
+```{r}
+data(oil) 
+head(oilType) # target
+head(fattyAcids) # df of predictors
+```
+
+### 2.5.a (10 points)
+
+**Use the sample function in base R to create a completely random sample of 60 oils. How closely do the frequencies of the random sample match the original samples? Repeat this procedure several times to understand the variation in the sampling process.**
+
+```{r}
+set.seed(503)
+trRows <- sample(nrow(fattyAcids), 60)
+fattyAcidsTrain <- fattyAcids[trRows,]
+fattyAcidsTest <- fattyAcids[-trRows,]
+
+oilTypeTrain <- oilType[trRows]
+oilTypeTest  <- oilType[-trRows]
+
+?rbind # allows for combining rows for easier comparisons 
+matrix <- rbind(
+  Original = table(oilType),
+  Random_Sample = table(oilTypeTrain)
+)
+?apply #use apply for the margin parameter to apply calculation on each row
+proportions <-apply(matrix, MARGIN = 1, function(x) x / sum(x))
+frequencies <- round(proportions, 2)
+frequencies
+```
+
+The original and random sample frequencies depending on oil type perform well 
+or do not perform well. As the amount of data increases for each column the 
+better the frequency comparison between original and sample data becomes.This is
+evident for oil types A and B. However Oil types C, E and F are have worse
+frequency comparisons showing that the Training data did not perform as
+well on those Oil Types.
+
+```{r}
+#We have to manually create our resample technique with simple random sample
+
+set.seed(1)
+trRows1 <- sample(nrow(fattyAcids), 60)
+proportions1 <- table(oilType[trRows1]) / 60
+
+set.seed(2)
+trRows2 <- sample(nrow(fattyAcids), 60)
+proportions2 <- table(oilType[trRows2]) / 60
+
+set.seed(3)
+trRows3 <- sample(nrow(fattyAcids), 60)
+proportions3 <- table(oilType[trRows3]) / 60
+
+matrix <- rbind(
+  Original = table(oilType) / 96, #96 because original data has 96 rows
+  First_Split = proportions1,
+  Second_Split = proportions2,
+  Third_Split = proportions3
+)
+matrix <- round(matrix, 2)
+matrix
+```
+
+### 2.5.b (5 points)
+
+**Use the caret package function `createDataPartition` to create a stratified random sample. How does this compare to the completely random samples?**
+
+```{r}
+#Resampling
+repeatedSplits <- createDataPartition(oilTypeTrain, p = 60/96, times = 3) #creating 3 splits
+strat_matr <- rbind(
+  strat_split1 = table(oilType[repeatedSplits$Resample1]) / 60, 
+  strat_split2 = table(oilType[repeatedSplits$Resample2]) / 60, 
+  strat_split3 = table(oilType[repeatedSplits$Resample3]) / 60 
+)
+strat_matr <- round(strat_matr, 2)
+strat_matr
+```
+
+*Surprisingly the simple random splits performed better than the stratified
+random sample, but this could be because a majority of the data is in class A 
+and B. Due to this simple random might grab those values more likely due to
+basic probability and be able to predict those values better. However stratified
+sampling does better performance on accuracy based on class as lower frequency
+classes performed better on stratified sampling.
+
+### 2.5.c (5 points)
+
+**With such a small sample size, what are the options for determining performance of the model? Should a test set be used?**
+
+*For this model, I do not think the sample size is large enough to have a test
+set. The book says it best when talking about smaller data
+sets, "Although resampling techniques can be misapplied... they often produce
+performance estimates superior to a single test set because they evaluate 
+many alternate versions of the data."(Kuhn & Johnson, 67). So the other
+options for determining model performance is to use resampling techniques
+such as cross validation.*
+
+### 2.5.d (10 points)
+
+One method for understanding the uncertainty of a test set is to use a confidence interval. To obtain a confidence interval for the overall accuracy, the based R function binom.test can be used. It requires the user to input the number of samples and the number correctly classified to calculate the interval. For example, suppose a test set sample of 20 oil samples was set aside and 76 were used for model training. For this test set size and a model that is about 80 % accurate (16 out of 20 correct), the confidence interval would be computed using
+
+```{r}
+p <- 0.8
+n <- 20
+binom.test(p * n,  n)
+```
+
+In this case, the width of the 95% confidence interval is 37.9%.
+
+**Hint:**
+
+```{r}
+t_result <- binom.test(p * n,  n)
+t_result$conf.int[2] - t_result$conf.int[1]
+```
+
+**Try different sample sizes and accuracy rates to understand the trade-off between the uncertainty in the results, the model performance, and the test set size.**
+
+```{r}
+p1 <- 0.9
+n1 <- 70
+t1_result <- binom.test(p1 * n1,  n1)
+```
+
+```{r}
+t1_result$conf.int[2] - t1_result$conf.int[1]
+```
+*... report observations...*
+
+With samples going up as well as probability, the values of the 
+confidence interval change so the percentage is smaller. In our example
+from 37.9% with probability 0.8 and samples 20, to 15.4%. 
+
+
+```{r}
+p2 <- 0.2
+n2 <- 10
+t2_result <- binom.test(p2 * n2,  n2)
+```
+
+```{r}
+t2_result$conf.int[2] - t2_result$conf.int[1]
+```
+
+With lower samples and lower probability the percentage range for the 
+confidence interval rises. The result of this range is 53% confidence interval
+range.

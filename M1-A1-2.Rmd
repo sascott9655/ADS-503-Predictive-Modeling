@@ -1,0 +1,249 @@
+---
+title: "Week1, Assignment 1"
+author: "Samuel Scott"
+format: 
+    html: 
+        toc: true
+    pdf: default
+editor: visual
+---
+
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(GGally)
+```
+
+## Problem 3.1 (30 points)
+
+The UC Irvine Machine Learning Repository contains a [Glass Identification Data Set](https://archive.ics.uci.edu/ml/datasets/Glass+Identification). The data consist of 214 glass samples labeled as one of seven class categories. There are nine predictors, including the refractive index and percentages of eight elements: Na, Mg, Al, Si, K, Ca, Ba, and Fe. The data can be accessed via:
+
+```{r}
+library(mlbench)
+data(Glass)
+```
+
+### 3.1.a (10 points)
+
+Using visualizations, explore the predictor variables to understand their distributions ...
+
+```{r, fig.width=12, fig.height=12}
+Hmisc::hist.data.frame(Glass)
+setwd("C:/Users/samsc/Desktop/ADS-503/ADS-503-Predictive-Modeling")
+head(Glass)
+library(Hmisc)
+boxplot(Glass) #boxplot shows that Silicon can be easily identified as it has the most amount of oxide out of all the glass types. The rest of the elements are under 20 units of oxide. 
+hist.data.frame(Glass) #the hist plot shows the distributions of the oxides based on frequency. This lets us know if our graphs will be skewed or not and what distributions we are working with.Most of the predictors are very skewed. The histogram also helped show that there are no missing values in the data set
+```
+
+as well as the relationships between predictors.Explore the relationship between predictors and response.
+
+Which elements do you think will be good/poor predictors (based on the visualizations)?
+
+The box plots visualization does a good job at determining which predictors are good and which are poor. Based on the visualizations of the box plots the good predictors are Magnesium and Aluminum. This is because their box plots vary greatly in terms of how much oxide is in each glass type making it easy to distinguish them when trying to classify glass Type. Barium is good too because it distinguishes type glass 7 very well. Poor predictors would be Iron and Silicon because they are difficult to distinguish among the glass types based on box plots.
+
+Compute the correlations between the predictors and the the `Type` variable.
+
+```{r}
+Glass$Type <- as.numeric(Glass$Type)
+cor(Glass)
+```
+
+Which elements do you think will be good/poor predictors (based on the correlation calculation)?
+
+Based on the correlation table, RI has some strong correlations with some predictors such as Calcium ,Aluminum, and Silicon. Magnesium also has strong correlations with most of the predictors in this data set including a strong negative correlation with Type target variable. Barium, Sodium, and Aluminum also show relatively strong correlations with the Type variable too making these good predictors for the data set. Poor predictors would be Iron and Potassium as they have very weak correlations with the predictors and target variable in this data set.
+
+### 3.1.b (10 points)
+
+Are there any outliers in the data?
+
+The boxplot visualizations used in 3.1.a show that each of the predictors have outliers as the circles in those visuals define outliers. Depending on the elements in the glass, outliers would be very strongly above average oxide levels or severely lower that average oxide levels. RI for example had many of the glassTypes be classified as a certain Type and would have outliers that would range far above the typical median of oxide levels for a particular Glass Type, while Silicon would have a majority of its outliers fall below the average oxide levels.
+
+```{r}
+boxplot(Glass)
+```
+
+The boxplot above shows the circles as outliers. The graph here shows that a majority of the outliers exceed averages of typical oxide levels for each element.
+
+Are any predictors skewed?
+
+The histogram above shows that a majority of the predictors are skewed as the histogram does a great job visualizing if the predictors are skewed. Iron, Potassium, Magnesium, Calcium and Barium all looked significantly skewed as the majority of the frequency data are either on the left side of the histogram or the right side of it. Aluminum, Silicon, and Sodium were the only graphs that appeared to look somewhat like a normal distribution.
+
+```{r}
+library(caret)
+library(e1071)
+before_skew_vals <- apply(Glass, 2, skewness) #before skew characteristics'
+before_skew_vals
+#str(before_skew) #numeric list of all skew values from our data
+```
+
+### 3.1.c (10 points)
+
+Are there any relevant transformations of one or more predictors that might improve the classification model? Assume the model requires the predictors to have approximately symmetric distribution. Apply relevant transformations to the predictors and observe the changes to the distributions of predictors.
+
+Hints:
+
+-   Skew values less than $\pm 0.5$ should be considered 'normal enough'
+-   Use \`caret::BoxCoxTrans()\` with appropriate adjustments for non-positive values.
+-   Use transformations that improve skew by \>50%
+
+```{r}
+# write code to evaluate the before and after skew characteristics, and select variables to transform (with before/after evaluation metrics). 
+
+elements_skewed <- names(before_skew_vals[abs(before_skew_vals) > 0.5]) #mask of names of elements that are skewed
+
+Glass2 <- Glass #Glass 2 is for the values to be updated so that there are not 0
+z <- sapply(Glass2[elements_skewed], function(x) {
+  if (min(x)<=0) abs(min(x)) + 10^-4 else 0
+}) #shift our values so they are all above zero
+for (x in elements_skewed) {
+  Glass2[[x]] <- Glass2[[x]] + z[[x]]
+} # the values are now above 0
+
+bct <- lapply(Glass2[,elements_skewed], BoxCoxTrans) #apply BCT to our skewed vars
+
+Glass_trans <- Glass2 #apply bct to a new Glass dataframe GlassTrans 
+for (y in elements_skewed) {
+  Glass_trans[[y]] <- predict(bct[[y]], Glass2[[y]]) #update the new skew values
+}
+after_skew_vals <- apply(Glass_trans, 2, skewness) #apply the skew transformation
+
+```
+
+## Problem 3.2 (20 points)
+
+The image below shows a scatter plot matrix of the continuous features of a dataset. Discuss the relationships between the features in the dataset that this scatter plot highlights. Make sure to discuss relationships between all pairs.
+
+![](A1_1_P3_2_Corr_Matrix.png)
+
+Hint: There should be 10 combinations \[ $n (n-1) / 2$ \] . The plot is missing a correlation coefficient for one – estimate what it is.
+
+Example: *Var1 has a [strongpositive]{.underline} correlation with Var2 of [0.XXX]{.underline}*
+
+1.  Life Expectancy has a very strong negative correlation with infant mortality with a correlation value that is not present. Based on the graph it appears the correlation value is close to -1, the strongest possible negative correlation. This makes sense because as life expectancy goes up the infant mortality wont happen because a person has exceed the infant age to not experience infant mortality.
+
+2.  Life Expectancy has a relatively strong positive correlation with Education of 0.477. This means that as Education increases so does the life expectancy.
+
+3.  Life Expectancy has a relatively strong positive correlation with Health of 0.572. As health rises in value so does life expectancy. This makes sense as good health helps someone live longer.
+
+4.  Life Expectancy has a strong positive correlation with HealthUSD, which is money spent on health, with a value of 0.776. This makes sense as when money is allocated into a resource like Health the more of it or the improvement of it should increase.
+
+5.  Infant Mortality has a relatively strong negative correlation with Education of -0.504. This means as Education value decreases the values of Infant Mortality rises.
+
+6.  Infant Mortality has a relatively strong negative correlation with Health of -0.500. This means as the Health values decreases the value of Infant Mortality increases.
+
+7.  Infant Mortality has a strong negative correlation with HealthUSD of -0.736. This means as the HealthUSD values decreases the value of Infant Mortality increases. This makes sense as the more money spent on Health the less likely an infant will be deceased.
+
+8.  Education has a strong positive correlation with Health of 0.689. As the Health value increases so does the value of Education. This makes sense as the healthier someone is the more educated they will become.
+
+9.  Education has a relatively strong positive correlation with HealthUSD of 0.527. As the HealthUSD value increases so does the value of Education. This relationship is interesting when compared with Education and Health because the Health metric is more strongly correlated with Education than HealthUSD. This implies that Health and HealthUSD is not a direct strong positive relationship and that Health is more important to Education than the money spent on Health.
+
+10. Health has a strong positive correlation with HealthUSD of 0.760. This means that as more money is spent on Health, the more Health goes up.
+
+## Problem 3.3 (10 points)
+
+Discuss the relationships between the variables shown in below visualizations:
+
+### **3.3.a** (5 points)
+
+The visualization below illustrates the relationship between Diastolic BP and Tachycardia, left most plot has data where Tachycardia = true and false (the full study population).
+
+![](A1_1_P3_3a_Tachardia_hist.png)
+
+In the true false Tachycardia graph (leftmost plot), the distributions of Diastolic BP seems to be slightly skewed to the right. In the false Tachycardia graph the distributions seem more normally distributed and the true tachycardia graph the Diastolic BP distributions are more rightly skewed. The data on the three graphs make intuitive sense as when Tachycardia is true the numbers fluctuated more to the higher values since Tachycardia is when someone has an abnormally high resting heart rate. Tachycardia when False has numbers that are more normally distributed since more people normally do not have Tachycardia than do, and the leftmost graph combines the two outcomes.
+
+### **3.3.b** (5 points)
+
+The visualization below illustrates the relationship between Height and Tachycardia, left most plot has data where Tachycardia = true and false.
+
+![](A1_1_P3_3b_Tachardia_hist.png)
+
+The distributions in the three graphs show the relationship between Tachycardia and height. All three graphs are normally distributed which shows us that there is not a strong correlation between Tachycardia and Height. The density are strongest when the height is around 170cm, but I believe that is just a relatively average height of a human being. 170 cm is about 5'5 which encompasses the average of a human being.
+
+## Problem 3.4 (30 points)
+
+Use the [HCV Data Set](https://archive.ics.uci.edu/ml/datasets/HCV+data) at the [UCI Machine Learning Repository](http://archive.ics.uci.edu/ml/datasets/HCV+data) (or download the `hcvdat0.csv` file in Canvas) and pick the numeric predictors (you can do this by excluding columns “X” , “Category”, “Age” and “Sex”) to perform the following analysis in R:
+
+```{r}
+csv <- list.files(".", pattern = 'hcvdat0.csv', recursive = TRUE) |> head(1) #|> pipe operator a programming tool that passes the output of one expression or function as the first argument to the next expression. 
+hcv <- read_csv(csv, show_col_types = FALSE) |> select(-c(1, Category, Age, Sex)) #"The data set contains laboratory values of blood donors and Hepatitis C patients and demographic values like age."(UCIrvine Machine Learning Repository)
+```
+
+### 3.4.a. Are there any missing data in the predictors? Identify all the predictors with missing values (5 points)
+
+```{r}
+hcv_missing <- sapply(hcv, function(x) sum(is.na(x)))
+#hcv_missing
+hcv_mask <- (hcv_missing != 0)
+#hcv_mask
+hcv_mask <- names(hcv_missing[hcv_mask])
+hcv_mask
+```
+
+Yes, the predictors with missing values are ALB, ALP, ALT, CHOL and PROT with ALP having the most missing values with 18.
+
+### 3.4.b. Summarize the missing data by each predictor. (5 points)
+
+Hint: Use `purrr::map_int`, or `lapply`
+
+```{r}
+#trying to impute the data so my skewness values are not NA
+hcv_impute <- hcv
+fill_data <- sapply(hcv_impute[hcv_mask], function(x) mean(x, na.rm = TRUE))
+fill_data
+for(x in hcv_mask){
+  #if(is.na(hcv_impute[[x]]) == TRUE) {
+  #  hcv_impute[[x]] <- fill_data[[x]]
+  #} if statements in R cannot handle vectors only variables because vector
+  #length is too long
+  hcv_impute[[x]][is.na(hcv_impute[[x]])] <- fill_data[[x]]
+}
+```
+
+### 3.4.c. Plot the histograms of predictors and visually identify predictors with skewed distributions. (5 points)
+
+```{r, fig.width=12, fig.height=12}
+hist.data.frame(hcv_impute)
+```
+
+Predictors ALP, ALT, AST, BIL, CREA, and GGT all appear to be skewed according to the histogram
+
+### 3.4.d. Compute skewness using the skewness function from the e1071 package. Are the skewness values aligning with the visual interpretations from part c. (5 points)
+
+```{r}
+skew_vals <- apply(hcv_impute, 2, skewness)
+```
+
+The skewness values match the histograms quite well as the predictors that looked skew were significantly skewed. All the values that are skewed are heavily skewed too.
+
+### 3.4.e. Apply box-cox transformations to the data and then recompute the skewness metrics and report the differences; does box-cox transformation help mitigate skewness? (5 points)
+
+```{r}
+blood_skewed <- names(skew_vals[abs(skew_vals) > 0.5]) 
+
+hcv_impute2 <- hcv_impute #hcv_impute2 is for the values to be updated so that there are not 0
+z <- sapply(hcv_impute2[blood_skewed], function(x) {
+  if (min(x)<=0) abs(min(x)) + 10^-4 else 0
+}) #shift our values so they are all above zero
+for (x in blood_skewed) {
+  hcv_impute2[[x]] <- hcv_impute2[[x]] + z[[x]]
+} # the values are now above 0
+
+bct3 <- lapply(hcv_impute2[,blood_skewed], BoxCoxTrans) #apply BCT to our skewed vars
+
+hcv_trans <- hcv_impute2 #apply bct to a new Glass dataframe GlassTrans 
+for (y in blood_skewed) {
+  hcv_trans[[y]] <- predict(bct3[[y]], hcv_trans[[y]]) #update the new skew values
+}
+skew_vals_updated <- apply(hcv_trans, 2, skewness) #apply the skew transformation
+skew_vals_updated
+```
+
+The Box Cox Transformation on the blood sample data set proved to be super effective as skew values went to near 0 meaning there is little to no skew. The highest skew belongs to the GGT protein at around -0.4, which shows that the data is significantly more balanced.
+
+### 3.4.f. Plot histograms of transformed predictors to observe changes to skewness visually. (5 points)
+
+```{r, fig.width=12, fig.height=12}
+hist.data.frame(hcv_trans)
+```
+
+The transformed predictors visually all appear to be close to normally distributed and they follow the transformed values, where there is a very little observed skewed in the graphs.

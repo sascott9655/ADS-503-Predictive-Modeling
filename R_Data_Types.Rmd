@@ -93,12 +93,12 @@ head(xd1)
 ## 6 6 f FALSE
 
 names(xd1) # names of columns in data frame
-#[1] "x" "y" "z"
+#[1] "x" "y" "z"                                           
 
 dim(xd1) # dimension of data frame
 
 # 10 rows by 3 columns
-
+                                                          
 nrow(xd1) # number of rows of data frame
 #10
 
@@ -241,6 +241,7 @@ hist.data.frame(airquality) #very cool function
 set.seed(20)
 ?rgamma #non-normal distribution graph
 x <- rgamma(1000, 2)
+x
 hist(x)
 
 library(e1071)
