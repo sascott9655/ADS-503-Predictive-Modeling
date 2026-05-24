@@ -1,0 +1,268 @@
+---
+title: "Lab3"
+author: "Sam Scott"
+date: "2026-05-21"
+output: html_document
+---
+
+OLS, PCR and PLS Methods.
+
+In this lab session we will learn about linear regression and it’s varaints principal component regression and partial least squares regression.
+
+For more details on how to handle multicollinearity see https://online.stat.psu.edu/stat462/node/180/.
+
+```{r}
+library(AppliedPredictiveModeling)
+data(solubility)
+str(solTrainXtrans)
+
+```
+
+```{r}
+str(solTrainXtrans, list.len = ncol(solTrainXtrans))
+```
+
+```{r}
+library(lattice)
+### Some initial plots of the data aka EDA
+?xyplot
+xyplot(solTrainY ~ solTrainX$MolWeight, type = c("p", "g"),
+       ylab = "Solubility (log)",
+       main = "(a)",
+       xlab = "Molecular Weight")
+
+```
+
+```{r}
+xyplot(solTrainY ~ solTrainX$NumRotBonds, type = c("p", "g"),
+       ylab = "Solubility (log)",
+       xlab = "Number of Rotatable Bonds")
+
+```
+
+```{r}
+bwplot(solTrainY ~ ifelse(solTrainX[,100] == 1,
+                          "structure present",
+                          "structure absent"),
+       ylab = "Solubility (log)",
+       main = "(b)",
+       horizontal = FALSE)
+
+```
+
+```{r}
+### Find the columns that are not fingerprints (i.e. the continuous predictors). grep will return a list of integers corresponding to column names that contain the pattern "FP".
+Fingerprints <- grep("FP", names(solTrainXtrans))
+#Fingerprints
+library(caret)
+```
+
+```{r}
+?featurePlot
+featurePlot(solTrainXtrans[, -Fingerprints],
+            solTrainY,
+            between = list(x=1,y=1),
+            type = c("g", "p", "smooth"),
+            labels = rep("", 2))
+
+
+```
+
+```{r}
+library(corrplot)
+```
+
+
+```{r}
+### We used the full namespace to call this function because the PLS package (also used in this chapter) has a function with the same name.
+
+
+# Let's look at correlations between not fingerprint predictors
+corrplot::corrplot(cor(solTrainXtrans[, -Fingerprints]),
+                  order = "hclust",
+                  t1.cex = .8)
+```
+
+```{r}
+#Let's look at correlations between some fingerprint predictors.
+corrplot::corrplot(cor(solTrainXtrans[, 1:30]),
+                  order = "hclust",
+                  t1.cex = .8)
+```
+
+```{r}
+#Create a control function that will be used across models. We
+#create the fold assignments explicitly instead of relying on the 
+#random number seed being set to identical values.
+set.seed(100)
+
+?createFolds
+?trainControl #control computational nuances of the train function
+indx <- createFolds(solTrainY, returnTrain = TRUE) #kfold cross validation
+ctrl <- trainControl(method = "cv", index = indx)
+
+#Linear regression model with all of the predictors, This will 
+# produce some warnings that a 'rank-deficient fit may be misleading'. This is related to the predictors being so highly 
+#correlated that some of the math has broken down.
+
+set.seed(100)
+lmTune0 <- train(solTrainXtrans, y=solTrainY,
+                 method = "lm",
+                 trControl = ctrl)
+lmTune0
+
+```
+
+```{r}
+# Look at VIF(Variance Inflation Factor) to see if there is any
+# multicollinearity among predictor variables
+
+library(car)
+```
+
+```{r}
+vif(lmTune0$finalModel) # 1/(1-R^2) where R is for predictor regressed against all other predictors
+
+```
+
+
+```{r}
+#Add another using a set of predictors reduced by unsupervised
+#filtering. We apply a filter to reduce extreme between-predictor #correlations. Note the lack of warnings.
+
+tooHigh <- findCorrelation(cor(solTrainXtrans), .9)
+trainXfiltered <- solTrainXtrans[, -tooHigh]
+testXfiltered <- solTestXtrans[, -tooHigh]
+
+set.seed(100)
+lmTune <- train(x = trainXfiltered, y = solTrainY, 
+                method = "lm",
+                trControl = ctrl)
+
+lmTune
+```
+
+```{r}
+vif(lmTune$finalModel) #vf values are smaller
+```
+
+```{r}
+#save test results in a data frame
+
+testResults <- data.frame(obs = solTestY,
+                          Linear_Regression = predict(lmTune, testXfiltered))
+
+## Run PCR and PLS on solubility data and compare results
+## Why PCR and PLS?
+
+#PCR = PCA  + Linear Regression 
+set.seed(100)
+pcrTune <- train(x = solTrainXtrans, y = solTrainY,
+                 method = "pcr",
+                 tuneGrid = expand.grid(ncomp = 1:35),
+                 trControl = ctrl)
+pcrTune
+
+```
+
+```{r}
+set.seed(100)
+plsTune <- train(x = solTrainXtrans, y = solTrainY,
+                 method = "pls",
+                 tuneGrid = expand.grid(ncomp = 1:35),
+                 trControl = ctrl)
+plsTune
+```
+
+```{r}
+resamp <- resamples(list(OLS = lmTune, PCR = pcrTune, PLS = plsTune))
+summary(resamp)
+```
+
+```{r}
+testResults <- predict(plsTune, solTestXtrans)
+
+plsResamples <- plsTune$results
+plsResamples$Model <- "PLS"
+plsResamples
+
+```
+
+```{r}
+pcrResamples <- pcrTune$results
+pcrResamples$Model <- "PCR"
+pcrResamples
+
+```
+
+```{r}
+plsPlotData <- rbind(plsResamples, pcrResamples)
+
+?xyplot
+xyplot(RMSE ~ ncomp,
+       data = plsPlotData,
+       #aspect = 1,
+       xlab = "# Components",
+       ylab = "RMSE (Cross Validation)",
+       auto.key = list(columns = 2),
+       groups = Model,
+       type = c("b", "a"))
+
+```
+
+```{r}
+?varImp #A generic method for calculating variable importance for objects produced by train and method specific methods
+plsImp <- varImp(plsTune, scale = FALSE)
+
+```
+```{r}
+?plotm #feature importance
+plot(plsImp, top = 25, scales = list(y = list(cex = .95)))
+```
+```{r}
+pcrImp <- varImp(pcrTune, scale = FALSE)
+plot(pcrImp, top = 25, scales = list(y = list(cex = .95)))
+
+```
+
+Penalized Linear Models: Lasso, Ridge, and Elastic Net.
+
+These methods work even if the number of observations are less than the number of predictors. These methods work by adding bias but reducing the variance more than the increase in bias^2, there by reducing the total prediction error of the model. These models illustrate the bias variance tradeoff in practice.
+```{r}
+set.seed(100)
+indx <- createFolds(solTrainY, returnTrain = TRUE)
+ctrl <- trainControl(method = "cv", index = indx)
+ridgeGrid <- expand.grid(lambda = seq(0, .1, length = 15))
+
+set.seed(100)
+ridgeTune <- train(x = solTrainXtrans, y = solTrainY,
+                   method = "ridge", #how to set ridge regression
+                   tuneGrid = ridgeGrid,
+                   trControl = ctrl,
+                   preProc = c("center", "scale"))
+ridgeTune
+```
+
+```{r}
+print(update(plot(ridgeTune), xlab = "Penalty"))
+#RMSE of 0.6856 is the lowest error for Ridge Model
+```
+
+```{r}
+?expand.grid
+
+enetGrid <- expand.grid(lambda = c(0, 0.01, .1),
+                        fraction = seq(.05, 1, length = 20)) #tuning Parameter
+
+set.seed(100)
+enetTune <- train(x = solTrainXtrans, y = solTrainY,
+                  method = "enet",
+                  tuneGrid = enetGrid,
+                  trControl = ctrl,
+                  preProc = c("center", "scale"))
+enetTune
+```
+
+```{r}
+plot(enetTune)
+```
