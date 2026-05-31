@@ -1,0 +1,469 @@
+---
+title: "M3-A1"
+author: "Sam Scott"
+date: "2026-05-23"
+output: html_document
+---
+
+```{r warning=FALSE, message=FALSE}
+suppressPackageStartupMessages(library(tidyverse))
+
+library(caret)
+library(AppliedPredictiveModeling)
+library(RANN)
+
+seed <- 123
+```
+
+Problem 3.1 (30 points)
+
+Infrared (IR) spectroscopy technology is used to determine the chemical makeup of a substance. The theory of IR spectroscopy holds that unique molecular structures absorb IR frequencies differently. In practice, a spectrometer fires a series of IR frequencies into a sample material, and the device measures the absorbance of the sample at each individual frequency. This series of measurements creates a spectrum profile which can then be used to determine the chemical makeup of the sample material.
+
+A Tecator Infratec Food and Feed Analyzer instrument was used to analyze 215 samples of meat across 100 frequencies. In addition to an IR profile, analytical chemistry determined the percent content of water, fat, and protein for each sample. If we can establish a predictive relationship between IR spectrum and fat content, then food scientists could predict a sample’s fat content with IR instead of using analytical chemistry. This would provide costs savings since analytical chemistry is a more expensive, time-consuming process
+
+3.1.a Load the data
+
+```{r}
+#?tecator
+data(tecator)
+water <- endpoints[, 1]
+fat <- endpoints[, 2]
+protein <- endpoints[, 3]
+```
+
+The matrix absorp contains the 100 absorbance values for the 215 samples, while matrix endpoints contain the percent of moisture, fat, and protein in columns 1–3, respectively.
+
+3.1.b (5 points)
+
+In this example, the predictors are the measurements at the individual frequencies. Because the frequencies lie in a systematic order (850–1,050 nm), the predictors have a high degree of correlation. Hence, the data lie in a smaller dimension than the total number of predictors (100). Use PCA to determine the effective dimension of these data. What is the effective dimension(it's the number of principal components needed to explain the majority of the variance in the data)?
+
+```{r 3_1_b}
+tecator_pca <- prcomp(absorp)
+
+tecator_pca_var <- tecator_pca$sdev^2 
+tecator_pca_var <- tecator_pca_var * 100/sum(tecator_pca_var)
+head(tecator_pca_var)
+```
+
+The effective dimension or the number of principal components needed to explain the majority of the variance in the data is 1. 
+
+3.1.c (20 points)
+
+Split the data into a training and a validation set using a resampling technique, pre-process the data by centering and scaling, and build linear regression, partial least squares, ridge regression, lasso regression and elastic net models described in this chapter. For those models with tuning parameters, what are the optimal values of the tuning parameter(s)?
+
+```{r} 
+#Data cleaning 
+absorp <- as.data.frame(absorp) #made a dataframe so it can be fit for modeling.
+
+#is.na(absorp) no missing data NA's
+#is.na(endpoints) no missing data for target variabel
+
+degenerateCols <- nearZeroVar(absorp)
+
+degenerateCols2 <- nearZeroVar(endpoints)
+
+#no degenerate columns
+
+```
+
+```{r 3_1_c}
+
+set.seed(seed)
+#use createDataPartition for stratified sampling
+trRows <- createDataPartition(fat, p=.8, list=FALSE) #stratified sampling technique
+#head(trainingRows)
+
+#train and test splits
+absorpTrain <- absorp[trRows,]
+absorpTest <- absorp[-trRows,]
+
+#no comma because fat is a vector
+fatTrain <- fat[trRows]
+fatTest  <- fat[-trRows]
+
+
+#using k-fold cross validation of 10 folds as resampling technique
+set.seed(seed)
+indx <- createFolds(fatTrain, returnTrain = TRUE)
+ctrl <- trainControl(method = "cv", index = indx)
+
+preProcess1 <- c("center", "scale")
+
+#linear regression
+set.seed(seed)
+lin_reg <- train(absorpTrain, fatTrain,
+                 method = "lm",
+                 trControl = ctrl,
+                 preProc = preProcess1
+                 ) #make sure to use both Training sets so amount of rows match
+
+set.seed(seed)
+pls <- train(absorpTrain, fatTrain,
+             method = "pls",
+             tuneGrid = expand.grid(ncomp = 1:35), #use tuneGrid for PLS since
+             #Linear Regression has no tuning parameters
+             trControl = ctrl,
+             preProc = preProcess1
+             )
+
+set.seed(seed)
+ridgeGrid <- expand.grid(lambda = seq(0, .1, length = 15))
+ridgeTune <- train(x = absorpTrain, y = fatTrain,
+                   method = "ridge",
+                   tuneGrid= ridgeGrid,
+                   trControl = ctrl,
+                   preProc = preProcess1
+                   )
+
+#names(getModelInfo()) #use this code to search up all method values for the 
+#train parameter method and lasso is a method name
+
+set.seed(seed)
+lassoGrid <- expand.grid(fraction = seq(0.05, 1, length = 15))
+lassoTune <- train(x = absorpTrain, y = fatTrain,
+                   method = "lasso",
+                   tuneGrid= lassoGrid,
+                   trControl = ctrl,
+                   preProc = preProcess1
+                   )
+
+set.seed(seed)
+enetGrid <- expand.grid(lambda = c(0, .1, length = 15),
+                        fraction = seq(0.05, 1, length = 15)) #tuning Parameter
+enetTune <- train(x = absorpTrain, y = fatTrain,
+                  method = "enet",
+                  tuneGrid = enetGrid,
+                  trControl = ctrl,
+                  preProc = preProcess1)
+
+```
+
+PLS optimal parameter is ncomp = 14.
+Ridge optimal parameter is kambda = 0.007142857.
+Lasso optimal parameter is fraction = 0.05.
+Elasticnet optimal parameters are lambda = 0 and fraction = 0.05.
+
+3.1.d (3 points)
+
+Which model has the best predictive ability using RMSE, MAE and R2 (on the training results) as metrics? Is any model significantly better or worse than the others?
+
+```{r 3_1_d}
+train_metrics <- resamples(list(Linear_Regression=lin_reg, PLS=pls, Ridge=ridgeTune,
+                               Lasso=lassoTune, Enet=enetTune))
+summary(train_metrics)
+dotplot(train_metrics)
+```
+
+On the training models the best model is the Lasso model. This is because on 
+all three metrics RMSE, R^2, and MAE the lasso values were superior to all the 
+other models. Lower scores on the error metrics MAE and RMSE were prevalent, and 
+having the highest R^2 scores showed that Lasso was the best model based on 
+these metrics. However this just means that Lasso understands
+the training data best. When it comes to predictive modeling knowing the 
+test data is more much important on determining model's value.
+
+
+3.1.e (2 points)
+
+Explain which model you would use for predicting the fat content of a sample.
+
+I would use the Linear Regression model as it seems to do a good job at 
+generalizing over the model. It does not seem to understand the training data,
+too well so I would think it would learn the test set as well. 
+
+Problem 3.2 (30 points)
+
+Developing a model to predict permeability (see Sect. 1.4) could save significant resources for a pharmaceutical company while at the same time more rapidly identifying molecules that have a sufficient permeability to become a drug:
+
+3.2.a Load the data:
+
+```{r 3_2_a}
+data(permeability)
+#?permeability
+perm <- permeability
+#class(perm)
+#class(fingerprints)
+```
+The matrix fingerprints contain the 1,107 binary molecular predictors for the 165 compounds, while the permeability matrix contains the permeability response.
+
+3.2.b (5 points)
+
+The fingerprint predictors indicate the presence or absence of substructures of a molecule and are often sparse, meaning that relatively few of the molecules contain each substructure. Filter out the predictors that have low frequencies using the nearZeroVar function from the caret package. How many predictors are left for modeling after filtering?
+
+```{r 3_2_b}
+low_freq <- nearZeroVar(fingerprints)
+#length(low_freq)
+fingerprints <- fingerprints[,-low_freq]
+ncol(fingerprints)
+```
+There are 388 columns left for modeling after filtering out the
+nearZeroVar predictors. 
+
+3.2.c (5 points)
+
+Split the data into a training (80%) and a test set (20%), pre-process the data, and tune a PLS model. How many latent variables are optimal, and what is the corresponding resampled estimate of R2?
+
+```{r 3_2_c}
+set.seed(seed)
+fingerprints <- as.data.frame(fingerprints)
+trainingRows <- createDataPartition(perm, p=.8, list=FALSE) #stratified sampling technique
+
+fingerprintsTrain <- fingerprints[trainingRows,]
+fingerprintsTest <- fingerprints[-trainingRows,]
+
+permTrain <- perm[trainingRows]
+permTest <- perm[-trainingRows]
+
+indx1 <- createFolds(permTrain, returnTrain = TRUE)
+ctrl1 <- trainControl(method = "cv", index = indx1)
+
+pls_perm <- train(fingerprintsTrain, permTrain,
+             method = "pls",
+             tuneGrid = expand.grid(ncomp = 1:35), #use tuneGrid for PLS since
+             #Linear Regression has no tuning parameters
+             trControl = ctrl1,
+             preProc = c("center", "scale")
+             )
+```
+
+The number of latent variables is 6, and the corresponding RMSE is 0.5349319
+
+3.2.d (3 points)
+
+Predict the response for the test set. What is the test set estimate of R2?
+
+```{r 3_2_d}
+testResults <- predict(pls_perm, fingerprintsTest)
+test_set_est <- cor(testResults, permTest)^2 #R^2 is the correlation between your testResults = y_pred and the yTest data squared
+test_set_est
+```
+
+3.2.e (15 points)
+
+Try building lasso, ridge and elastic net regression models discussed in this chapter. Do any have better predictive performance using R2 as metric on the test data?
+
+```{r 3_2_e}
+set.seed(seed)
+indx1 <- createFolds(permTrain, returnTrain = TRUE)
+ctrl1 <- trainControl(method = "cv", index = indx1)
+
+preProcess2 <- c("center", "scale")
+
+ridgeGrid2 <- expand.grid(lambda = seq(0, .1, length = 15))
+ridgeTune2 <- suppressWarnings(train(x = fingerprintsTrain, y = permTrain,
+                   method = "ridge",
+                   tuneGrid= ridgeGrid2,
+                   trControl = ctrl1,
+                   preProc = preProcess2
+                   ))
+
+lassoGrid2 <- expand.grid(fraction = seq(0.05, 1, length = 15))
+lassoTune2 <- suppressWarnings(train(x = fingerprintsTrain, y = permTrain,
+                   method = "lasso",
+                   tuneGrid= lassoGrid2,
+                   trControl = ctrl1,
+                   preProc = preProcess2
+                   ))
+
+enetGrid2 <- expand.grid(lambda = seq(0, .1, length = 15), fraction = seq(0.05, 1, length = 15))
+enetTune2 <- suppressWarnings(train(x = fingerprintsTrain, y = permTrain,
+                   method = "enet",
+                   tuneGrid= enetGrid2,
+                   trControl = ctrl1,
+                   preProc = preProcess2
+                   ))
+
+testResultsRidge <- predict(ridgeTune2, fingerprintsTest)
+test_set_est_Ridge <- cor(testResultsRidge, permTest)^2 
+test_set_est_Ridge
+
+testResultsLasso <- predict(lassoTune2, fingerprintsTest)
+test_set_est_Lasso <- cor(testResultsLasso, permTest)^2 
+test_set_est_Lasso
+
+testResultsEnet <- predict(enetTune2, fingerprintsTest)
+test_set_est_Enet <- cor(testResultsEnet, permTest)^2 
+test_set_est_Enet
+```
+The Ridge Regression has a R^2 score of 0.40,
+The Lasso Regression has a R^2 score of 0.38,
+and the Enet Regression has a R^2 score of 0.38. 
+These models all performed better than the PLS regression model.
+
+3.2.f (2 points)
+
+Would you recommend any of your models to replace the permeability laboratory experiment?
+
+The penalty based models all outperform
+the PLS regression model and the Ridge Regression is the model I would use,
+since it has the highest R^2 value.
+
+Problem 3.3 (30 points)
+
+A chemical manufacturing process for a pharmaceutical product was discussed in Section.1.4 of the textbook. In this problem, the objective is to understand the relationship between biological measurements of the raw materials (predictors), measurements of the manufacturing process (predictors), and the response of product yield. Biological predictors cannot be changed but can be used to assess the quality of the raw material before processing. On the other hand, manufacturing process predictors can be changed in the manufacturing process. Improving product yield by 1% will boost revenue by approximately one hundred thousand dollars per batch:
+
+3.3.a
+
+```{r 3_3_a}
+library(AppliedPredictiveModeling)
+data(ChemicalManufacturingProcess) 
+CMP <- ChemicalManufacturingProcess
+```
+
+The ChemicalManufacturingProcess data frame contains 57 predictors (12 describing the input biological material and 45 describing the process predictors) and a yield column which is the percent yield for each run for the 176 manufacturing runs.
+
+3.3.b (4 points)
+
+Split the data into a training (80%) and a test set (20%). A small percentage of cells in the predictor set contain missing values. Use an imputation function to fill in these missing values in both training and test data sets, also perform centering and scaling.
+
+```{r 3_3_b}
+#Kind of want to try K-nearest neighbors on missing data p.42 of Predictive Modeling Book
+set.seed(seed)
+trainingSplit <- createDataPartition(CMP$Yield, p=.8, list=FALSE) #stratified sampling technique
+
+Yield <- CMP$Yield
+
+CMP <- CMP[c(-1)] #remove the Yield target outcome (see below for code to help me realize this!!)
+
+CMP_Train <- CMP[trainingSplit,]
+CMP_Test <- CMP[-trainingSplit,]
+
+zeroVar_CMP_train <- nearZeroVar(CMP_Train)
+zeroVar_CMP_test <- nearZeroVar(CMP_Test)
+
+CMP_Train <- CMP_Train[,-zeroVar_CMP_train]
+CMP_Test <- CMP_Test[,-zeroVar_CMP_test]
+
+Yield_Train <- Yield[trainingSplit]
+Yield_Test <- Yield[-trainingSplit]
+
+
+knnImpute_Train <- preProcess(CMP_Train, method = c("knnImpute", "center", "scale"))
+knnImpute_Test <- preProcess(CMP_Test, method = c("knnImpute", "center", "scale"))
+
+#class(knnImpute_Train) #preProcess class (huge list of numeric vectors)
+#class(knnImpute_Test) #preProcess class (huge list of numeric vectors)
+#str(knnImpute_Train) #preProcess is a huge list of numeric vectors from 
+# [1:trainSplitAmount]
+#str(knnImpute_Test) #preProcess is a huge list of numeric vectors from 
+# [1:testSplitAmount]
+
+#because knnImpute_Train and knnImpute_Test are preProcess class type
+#we need to use the predict method to determine how well our preProcessed data will do on the Training and Test sets. Doing this as well inherently turn the data type from preProcess to data.frame which the models can train on the data.frame type and not preProcess type
+
+CMP_Train_knnImpute <- predict(knnImpute_Train, CMP_Train)
+CMP_Test_knnImpute <- predict(knnImpute_Test, CMP_Test)
+
+#class(CMP_Train_knnImpute)
+
+```
+
+A total of 106 values were imputed from both the train and test sets. 
+
+3.3.c (16 points)
+
+Tune lasso regression model (lasso), ridge regression model (ridge), partial least squares model (pls), and elastic net model (enet) from chapter 6. What is the optimal value of the resampled performance metric RMSE?
+
+```{r 3_3_c}
+set.seed(seed)
+indx2 <- createFolds(Yield_Train, returnTrain = TRUE)
+ctrl2 <- trainControl(method = "cv", index = indx2)
+
+ridgeGrid3 <- expand.grid(lambda = seq(0, .1, length = 15))
+ridgeTune3 <- train(x = CMP_Train_knnImpute, y = Yield_Train,
+                   method = "ridge",
+                   tuneGrid= ridgeGrid3,
+                   trControl = ctrl2
+                   )
+
+lassoGrid3 <- expand.grid(fraction = seq(0.05, 1, length = 15))
+lassoTune3 <- train(x = CMP_Train_knnImpute, y = Yield_Train,
+                   method = "lasso",
+                   tuneGrid= lassoGrid3,
+                   trControl = ctrl2
+                   )
+
+enetGrid3 <- expand.grid(lambda = seq(0, .1, length = 15),
+                          fraction = seq(0.05, 1, length = 15))
+enetTune3 <- train(x = CMP_Train_knnImpute, y = Yield_Train,
+                   method = "enet",
+                   tuneGrid= enetGrid3,
+                   trControl = ctrl2
+                   )
+pls_yield <- train(CMP_Train_knnImpute, Yield_Train,
+             method = "pls",
+             tuneGrid = expand.grid(ncomp = 1:35), #use tuneGrid for PLS since
+             #Linear Regression has no tuning parameters
+             trControl = ctrl2
+             )
+
+
+#Best RMSE metric out of all 4 models
+```
+Ridge RMSE: 1.67 when lambda value is 0.5
+Lasso RMSE: 1.19 score when fraction values is 0.05
+Enet RMSE : 1.16 score when lambda = 0.001 and fraction = 0.18
+PLS RMSE : 1.11 score when ncomp is 3.
+PLS has the smallest optimal RMSE score with 1.11. This shows that the PLS model knows the training data the best, which could reflect poorly on how well it trains on the unseen data.
+
+3.3.d (5 points)
+
+Predict the response for the test set using the above trained models. What is the value of the performance metric RMSE, and how does this compare with the resampled performance metric RMSE on the training set?
+
+```{r 3_3_d}
+testResultsRidge3 <- predict(ridgeTune3, CMP_Test_knnImpute)
+test_set_est_Ridge3 <- cor(testResultsRidge3, Yield_Test)^2 
+test_set_est_Ridge3
+
+testResultsLasso3 <- predict(lassoTune3, CMP_Test_knnImpute)
+test_set_est_Lasso3 <- cor(testResultsLasso3, Yield_Test)^2 
+test_set_est_Lasso3
+
+testResultsEnet3 <- predict(enetTune3, CMP_Test_knnImpute)
+test_set_est_Enet3 <- cor(testResultsEnet3, Yield_Test)^2 
+test_set_est_Enet3
+
+testResultsPls3 <- predict(pls_yield, CMP_Test_knnImpute)
+test_set_est_pls3 <- cor(testResultsPls3, Yield_Test)^2 #R^2 is the correlation between your testResults = y_pred and the yTest data squared
+test_set_est_pls3
+
+```
+As predicted the PLS model tested the unseen data the worst out of the 4 models, with an R^2 score of 0.46, because it probably learned the training data too well, so there is a likely chance that there is some overfitting present in that model. The model that performed best on the testing data was the Lasso with R^2 of 0.60, followed by Enet with 0.57 R^2 score, then thirdly Ridge with 0.50 R^2 Score. 
+
+
+```{r}
+#a lot of my errors stem from having the yield
+#target variable in my training model
+#so R^2 values came to 1. Another was that I did not
+#preProcess my test data which still had NA values
+#These three lines of code help me realize my main issues with modeling.
+
+###names(CMP_Train)
+###sum(colSums(is.na(CMP_Train_knnImpute)))
+###sum(colSums(is.na(CMP_Test_knnImpute)))
+```
+
+
+3.3.e (5 points)
+
+In the optimal model, how many biological and process predictors remain (whose coefficient is greater than zero)? What are the top five predictors (use absolute values of coefficients) that have the most impact on the yield?
+
+```{r 3_3_e}
+#lasso
+lasso_Important_Features <- varImp(lassoTune3, scale = FALSE)
+#names(lasso_Important_Features)
+important_feature_values <- lasso_Important_Features$importance$Overall # get values from our lasso_Important_Features
+names(important_feature_values) <- rownames(lasso_Important_Features$importance) #get the names and the values 
+#into the important_feature_values list
+gtZero <- important_feature_values[important_feature_values > 0]
+#All 56 predictors have a feature importance value 
+#greater than 0.
+
+#Top 5 predictors with highest feature importance
+top5 <- sort(gtZero, decreasing = TRUE)[1:5]
+top5
+
+
+
+
+```
