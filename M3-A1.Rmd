@@ -7,7 +7,6 @@ output: html_document
 
 ```{r warning=FALSE, message=FALSE}
 suppressPackageStartupMessages(library(tidyverse))
-
 library(caret)
 library(AppliedPredictiveModeling)
 library(RANN)
@@ -24,7 +23,6 @@ A Tecator Infratec Food and Feed Analyzer instrument was used to analyze 215 sam
 3.1.a Load the data
 
 ```{r}
-#?tecator
 data(tecator)
 water <- endpoints[, 1]
 fat <- endpoints[, 2]
@@ -46,6 +44,7 @@ head(tecator_pca_var)
 ```
 
 The effective dimension or the number of principal components needed to explain the majority of the variance in the data is 1. 
+
 
 3.1.c (20 points)
 
@@ -114,28 +113,19 @@ ridgeTune <- train(x = absorpTrain, y = fatTrain,
                    trControl = ctrl,
                    preProc = preProcess1
                    )
-
-#names(getModelInfo()) #use this code to search up all method values for the 
-#train parameter method and lasso is a method name
-
-set.seed(seed)
 lassoGrid <- expand.grid(fraction = seq(0.05, 1, length = 15))
 lassoTune <- train(x = absorpTrain, y = fatTrain,
                    method = "lasso",
                    tuneGrid= lassoGrid,
                    trControl = ctrl,
-                   preProc = preProcess1
-                   )
-
-set.seed(seed)
+                   preProc = preProcess1)
 enetGrid <- expand.grid(lambda = c(0, .1, length = 15),
-                        fraction = seq(0.05, 1, length = 15)) #tuning Parameter
+                        fraction = seq(0.05, 1, length = 15))
 enetTune <- train(x = absorpTrain, y = fatTrain,
-                  method = "enet",
-                  tuneGrid = enetGrid,
-                  trControl = ctrl,
-                  preProc = preProcess1)
-
+                   method = "enet",
+                   tuneGrid= enetGrid,
+                   trControl = ctrl,
+                   preProc = preProcess1)
 ```
 
 PLS optimal parameter is ncomp = 14.
@@ -148,8 +138,7 @@ Elasticnet optimal parameters are lambda = 0 and fraction = 0.05.
 Which model has the best predictive ability using RMSE, MAE and R2 (on the training results) as metrics? Is any model significantly better or worse than the others?
 
 ```{r 3_1_d}
-train_metrics <- resamples(list(Linear_Regression=lin_reg, PLS=pls, Ridge=ridgeTune,
-                               Lasso=lassoTune, Enet=enetTune))
+train_metrics <- resamples(list(Linear_Regression=lin_reg, PLS=pls, ridge=ridgeTune,Lasso=lassoTune, Enet=enetTune))
 summary(train_metrics)
 dotplot(train_metrics)
 ```
@@ -355,7 +344,6 @@ CMP_Train_knnImpute <- predict(knnImpute_Train, CMP_Train)
 CMP_Test_knnImpute <- predict(knnImpute_Test, CMP_Test)
 
 #class(CMP_Train_knnImpute)
-
 ```
 
 A total of 106 values were imputed from both the train and test sets. 
@@ -462,8 +450,4 @@ gtZero <- important_feature_values[important_feature_values > 0]
 #Top 5 predictors with highest feature importance
 top5 <- sort(gtZero, decreasing = TRUE)[1:5]
 top5
-
-
-
-
 ```
