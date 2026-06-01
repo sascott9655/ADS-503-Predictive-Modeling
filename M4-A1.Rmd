@@ -1,86 +1,107 @@
 ---
 title: "M4-A1"
 author: "Sam Scott"
-date: "2026-05-30"
+date: "2026-06-01"
 output: html_document
 ---
 
 ```{r warning=FALSE, message=FALSE}
 library(caret)
-# ... add additional libraries here ...
+library(earth)
 library(tidyverse)
-# ...
+library(kernlab)
+library(mlbench)
+library(randomForest)
 
 # ggplot
 theme_set(theme_minimal())
 
 seed <- 123
 ```
-Problem 4.1 (20 points)
+
+## Problem 4.1 (20 points)
 
 Simulate a single predictor and a nonlinear relationship, such as a sin wave shown in Fig. 7.7 of textbook, and investigate the relationship between the cost, 𝜺, and kernel parameters for a support vector machine model
 
-```{r}
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
 set.seed(seed)
 sinData <- tibble(
     x = runif(100, min = 2, max = 10),
     y = sin(x) + rnorm(length(x)) * .25
 )
-sinData |> 
+prevent_printing <- sinData |> 
     ggplot(aes(x,y)) +
     geom_point() 
 ## Create a grid of x values to use for prediction 
 dataGrid <- tibble(x = seq(2, 10, length = 100))
 ```
-4.1.a (12 points)
 
-Fit different models using a radial basis function and different values of the cost (the C parameter) and 𝜀assigning sigma a constant value of 1. To study the impact of each parameter, keep all other parameters constant and vary only one parameter at a time. Plot the fitted curves and discuss what happens when cost and epsilon parameters are varied in terms of overfitting/underfitting.
+### 4.1.a (12 points)
+
+**Fit different models using a radial basis function and different values of the cost (the C parameter) and 𝜀assigning sigma a constant value of 1. To study the impact of each parameter, keep all other parameters constant and vary only one parameter at a time. Plot the fitted curves and discuss what happens when cost and epsilon parameters are varied in terms of overfitting/underfitting.**
 
 ```{r 4_1_a}
 # library(kernlab)
-
+set.seed(seed)
 SVM_explore <- function(cost, epsilon, 
                         data_grid = dataGrid, sin_data = sinData) {
-#... code ..
+
+  svmFit <- ksvm(x = sin_data$x, y = sin_data$y, # because sin_data is a tibble R needs to extract numerics in order to model values
+                 kernel = "rbfdot",
+                 C = cost, epsilon = epsilon)
+  
+  predictions <- predict(svmFit, data_grid)
+
     tibble(
-        # x = ... , 
-        # y = ... ,
-        # label = ...
+      x = data_grid$x, #because data_grid is a tibble R needs to extract numerics
+      y = predictions, #numeric vector
+      method = "svmRadial",
+      cost = cost,
+      epsilon = epsilon
     )
 }
 
-cost_varies <- 10^seq(-2,1, length = 4)
-eps01_fixed <- rep(0.1, 4)
+cost_varies <- 10^seq(-2,1, length = 4) #change in cost (0.01, 0.10, 1.00, 10.00)
+eps01_fixed <- rep(0.1, 4) #4 iterations of the same epsilon value 0.1
+
 cost_curves <- map2_dfr(cost_varies,
                         eps01_fixed,
                         ~ SVM_explore(.x, .y))
-#  ggplot(cost_curves ...)
+ggplot(cost_curves, aes(x = x, y = y, color = factor(cost))) + geom_line(size=1)
 
-eps_varies <- c(0.01, 0.1, 0.5, 1.0)
-cost_fixed <- rep(0.1, 4)
+eps_varies <- c(0.01, 0.1, 0.5, 1.0) #epsilon values vary
+cost_fixed <- rep(0.1, 4) #cost values are fixed
 eps_curves <- map2_dfr(cost_fixed,
                         eps_varies,
                         ~ SVM_explore(.x, .y))
-#  ggplot(eps_curves ...)
+ggplot(eps_curves, aes(x = x, y = y, color = factor(epsilon))) + geom_line(size=1)
 ```
-...Observations on varying Cost...
 
-...Observations on varying Epsilon...
+When studying the varying cost of values, the lower the cost value the more the model does not fit the data,or it under fits. When the value of C rises, the more the model will try and fit the data or over fit. Striking a good balance is ideal and I believe that C value = 0.1 is the model that will generalize best over unseen test data.
 
-4.1.b (8 points)
+With epsilon the opposite relationship is true when juxtaposed with the cost value. As the values of epsilon increase, the more the model under fits. Smaller epsilon values fit the sin wave better than big epsilon values.
 
-The σ parameter can be adjusted using the kpar argument, such as kpar = list(sigma = 1). Try different values of σ to understand how this parameter changes the model fit. How do the cost, 𝜺, and σ values affect the model?
+### 4.1.b (8 points)
 
-Hint: you'll need to modify the SVM_explore function above
+**The σ parameter can be adjusted using the kpar argument, such as kpar = list(sigma = 1). Try different values of σ to understand how this parameter changes the model fit. How do the cost, 𝜺, and σ values affect the model?**
+
+**Hint:** you'll need to modify the `SVM_explore` function above
 
 ```{r 4_1_b}
-SVM_explore3 <- function(cost = 0.1, epsilon = 0.1, sigma = 1, 
+SVM_explore3 <- function(cost = 0.1, epsilon = 0.1, sigma = sigma, 
                         data_grid = dataGrid, sin_data = sinData) {
-#... code ..
+
+  svm2 <- ksvm(sinData$x, sinData$y,
+                   kernel = "rbfdot", kpar = list(sigma = sigma),
+                   C = cost, epsilon = epsilon, sigma = sigma)
+  
+  predictions2 <- predict(svm2, data_grid)
+  
     tibble(
-        # x = ... , 
-        # y = ... ,
-        # label = ...
+         x = data_grid$x, 
+         y = predictions2,
+         method = "svmRadial",
+         sigma = sigma
     )
 }
 
@@ -88,164 +109,308 @@ sigma_varies <- 10^seq(-2,1, length = 4)
 sigma_curves <- map_dfr(sigma_varies,                   #note switch to map2... from map...
                         ~ SVM_explore3(sigma = .x))
 
-#  ggplot(sigma_curves ...) ...
-
-...Observations on varying Epsilon...
+ggplot(sigma_curves, aes(x = x, y = y, color = factor(sigma))) + geom_line(size = 1)
 ```
-Problem 4.2 (30 points)
+
+When the sigma value is low, it is a straight line that does not fit the data, which could lead to underfitting. This is like a low cost value or a high epsilon value. As the value of sigma increases the better the line fits the data, which could lead to overfitting. This is like how a high cost value or a low cost epsilon will fit the data.
+
+## Problem 4.2 (30 points)
 
 Returning to the chemical manufacturing process data (from Module 3 Assignment Problem 3.3):
 
 ```{r 4_2_data}
 library(AppliedPredictiveModeling)
 data(ChemicalManufacturingProcess) 
+CMP <- ChemicalManufacturingProcess
 ```
-The ChemicalManufacturingProcess data frame contains 57 predictors (12 describing the input biological material and 45 describing the process predictors) and a yield column which is the percent yield for each run for the 176 manufacturing runs. Split the data into a training (80%) and a test set (20%). A small percentage of cells in the predictor set contain missing values. Use an imputation function to fill in these missing values in both training and test data sets, also perform centering and scaling. Build and tune nonlinear regression models Neural network, MARS, SVM and KNN.
 
-Hint: Reuse code from Module 3 Problem 3.3.b
+The ChemicalManufacturingProcess data frame contains 57 predictors (12 describing the input biological material and 45 describing the process predictors) and a yield column which is the percent yield for each run for the 176 manufacturing runs. **Split the data into a training (80%) and a test set (20%). A small percentage of cells in the predictor set contain missing values. Use an imputation function to fill in these missing values in both training and test data sets, also perform centering and scaling. Build and tune nonlinear regression models Neural network, MARS, SVM and KNN.**
+
+***Hint: Reuse code from Module 3 Problem 3.3.b***
 
 ```{r 4_2_prep}
-#...code for data prep (reuse from 3.3 (b)...
+set.seed(seed)
+trainingSplit <- createDataPartition(CMP$Yield, p=.8, list=FALSE) 
+
+Yield <- CMP$Yield
+
+CMP <- CMP[c(-1)]
+
+CMP_Train <- CMP[trainingSplit,]
+CMP_Test <- CMP[-trainingSplit,]
+
+zeroVar_CMP_train <- nearZeroVar(CMP_Train)
+zeroVar_CMP_test <- nearZeroVar(CMP_Test)
+
+CMP_Train <- CMP_Train[,-zeroVar_CMP_train]
+CMP_Test <- CMP_Test[,-zeroVar_CMP_test]
+
+Yield_Train <- Yield[trainingSplit]
+Yield_Test <- Yield[-trainingSplit]
+
+knnImpute_Train <- preProcess(CMP_Train, method = c("knnImpute", "center", "scale"))
+knnImpute_Test <- preProcess(CMP_Test, method = c("knnImpute", "center", "scale"))
+
+CMP_Train_knnImpute <- predict(knnImpute_Train, CMP_Train)
+CMP_Test_knnImpute <- predict(knnImpute_Test, CMP_Test)
 ```
-Model fits
+
+### Model fits
 
 ```{r 4_2_fit}
 #| cache: true
 #... code for non-linear models...
-```
-4.2.a (20 point)
 
-Which nonlinear regression model gives the optimal resampling and test set performance (use RMSE metric to make this determination)?
+tooHigh <- findCorrelation(cor(CMP_Train_knnImpute), cutoff = .75)
+#tooHigh
+
+CMP_Train_knnImpute <- CMP_Train_knnImpute[,-tooHigh]
+CMP_Test_knnImpute <- CMP_Test_knnImpute[,-tooHigh]
+
+set.seed(seed)
+indx <- createFolds(Yield_Train, k = 10, returnTrain = TRUE)
+ctrl <- trainControl(method = "cv", index = indx)
+nnetGrid <- expand.grid(decay = c(0, 0.01, .1),
+                        size = c(1:10))
+nnet <- train(CMP_Train_knnImpute, Yield_Train,
+              method = "nnet",
+              trControl = ctrl,
+              tuneGrid = nnetGrid,
+              linout = TRUE,
+              #Reduce the amount of printed output
+              trace = FALSE,
+              #Expand the number of iterations to find
+              #parameter estimates
+              MaxNWts = 10 * (ncol(CMP_Train_knnImpute) + 1) + 10 + 1, #371 weights
+              maxit = 500)
+#nnet
+```
+
+```{r MARS}
+set.seed(seed)
+
+MARSFit <- earth(CMP_Train_knnImpute, Yield_Train)
+#MARSFit #15 of 22 terms, and 10 of 35 predictors
+
+MARSGrid <- expand.grid(degree = 1:2, nprune = 2:30)
+MARS <- train(CMP_Train_knnImpute, Yield_Train,
+              method ="earth",
+              tuneGrid = MARSGrid,
+              trControl = ctrl)
+
+#MARS
+```
+
+```{r SVM}
+set.seed(seed)
+
+SVM <- train(CMP_Train_knnImpute, Yield_Train,
+             method = "svmRadial",
+             tuneLength = 14,
+             trControl = ctrl) #using a lot of defaults
+#SVM
+```
+
+```{r KNN}
+set.seed(seed)
+knn <- train(CMP_Train_knnImpute, Yield_Train,
+             method = "knn",
+             tuneGrid = data.frame(k = 1:10),
+             trControl = ctrl)
+#knn
+```
+
+### 4.2.a (20 point)
+
+**Which nonlinear regression model gives the optimal resampling and test set performance (use RMSE metric to make this determination)?**
 
 ```{r 4_2_a}
 #... summarize results ...#
+tr_metrics <- resamples(list(Neural_Net = nnet, MARS = MARS, SVMR = SVM, KNN = knn ))
+#gives RMSE of training set
+summary(tr_metrics$values$`Neural_Net~RMSE`)
+summary(tr_metrics$values$`MARS~RMSE`)
+summary(tr_metrics$values$`SVMR~RMSE`)
+summary(tr_metrics$values$`KNN~RMSE`)
 ```
-...Answer...
 
-4.2.b (5 point)
+```{r RMSE function}
+getRMSE <- function(x, y) {
+  sqrt(mean((x - y)^2))
+}
+```
 
-What are the ten most important predictors in the optimal nonlinear regression model? Do either the biological or process variables dominate the list?
+```{r Test Set Performance}
+testResultsNnet <- predict(nnet, CMP_Test_knnImpute)
+testResultsMARS <- predict(MARS, CMP_Test_knnImpute)
+testResultsSVMR <- predict(SVM, CMP_Test_knnImpute)
+testResultsKnn <- predict(knn, CMP_Test_knnImpute)
+RMSE_test_Nnet <- getRMSE(testResultsNnet, Yield_Test)
+RMSE_test_MARS <- getRMSE(testResultsMARS, Yield_Test)
+RMSE_test_SVMR <- getRMSE(testResultsSVMR, Yield_Test)
+RMSE_test_Knn <- getRMSE(testResultsKnn, Yield_Test)
+RMSE_test_Nnet 
+RMSE_test_MARS 
+RMSE_test_SVMR 
+RMSE_test_Knn 
+```
+
+The Model that has the lowest training RMSE is the SVM model with 1.19 RMSE score on average. The model with the lowest test RMSE is also the SVM model with 1.29 RMSE score.
+
+### 4.2.b (5 point)
+
+**What are the ten most important predictors in the optimal nonlinear regression model? Do either the biological or process variables dominate the list?**
 
 ```{r 4_2_b}
-#... code ...#
+SVM_Imp <-varImp(SVM, scale = FALSE)
+important_feature_values <- SVM_Imp$importance$Overall
+names(important_feature_values) <- rownames(SVM_Imp$importance)
+top10 <- round(sort(important_feature_values, decreasing = TRUE)[1:10], 2)
+#top10
 ```
-...Answer...
 
-4.2.c (5 point)
+Biological variables have 4/10 variables in the top 10 of feature importance while process variables the remaining 6/10 are top 10 in feature importance variables.
 
-How do the important predictors compare to the important predictors from the optimal linear model you built in module 3 assignment? (complete the table below)
+### 4.2.c (5 point)
 
-Ranked importance of predictors by model
+**How do the important predictors compare to the important predictors from the optimal linear model you built in module 3 assignment? (complete the table below)**
 
-Predictor
+*Ranked importance of predictors by model*
 
-SVM Rank (1-10)
+|              Predictor | SVM Rank (1-10) | Lasso Rank (1-5) |
+|-----------------------:|:---------------:|:----------------:|
+|   BiologicalMaterial03 |        1        |        3         |
+| ManufacturingProcess36 |        2        |        5         |
+| ManufacturingProcess17 |        3        |        \-        |
+| ManufacturingProcess06 |        4        |        \-        |
+|   BiologicalMaterial11 |        5        |        \-        |
+| ManufacturingProcess11 |        6        |        \-        |
+| ManufacturingProcess30 |        7        |        \-        |
+|   BiologicalMaterial09 |        8        |        \-        |
+| ManufacturingProcess27 |        9        |        \-        |
+|   BiologicalMaterial05 |       10        |        \-        |
+| ManufacturingProcess32 |       \-        |        1         |
+|   BiologicalMaterial06 |       \-        |        2         |
+| ManufacturingProcess17 |       \-        |        4         |
 
-Lasso Rank (1-5)
+**Hint**: *The total number of rows in the table above should be 10 + any variables from Assignment 3 top 5 that are NOT in the top 10 for your non-linear model*
 
-VarNN
-
-1
-
-<Rank or empty>
-
-VarNN
-
-2
-
-<Rank or empty>
-
-...
-
-...
-
-...
-
-VarNN
-
-10
-
-<Rank or empty>
-
-...
-
-...
-
-<Rank>
-
-Hint: The total number of rows in the table above should be 10 + any variables from Assignment 3 top 5 that are NOT in the top 10 for your non-linear model
-
-Problem 4.3 (30 points)
+## Problem 4.3 (30 points)
 
 Recreate the simulated data as shown below:
 
-{r 4_3_data}
-library(mlbench)
+```{r 4_3_data}
 set.seed(200)
 simulated <- mlbench.friedman1(200, sd = 1)
 simulated <- cbind(simulated$x, simulated$y) 
 simulated <- as.data.frame(simulated) 
 colnames(simulated)[ncol(simulated)] <- "y"
+```
 
 In this data set V6 to V10 are columns that are random noise and have no relation to the response.
 
-4.3.a (10 points)
+### 4.3.a (10 points)
 
-Fit a random forest model to all of the predictors, then estimate the variable importance scores
+**Fit a random forest model to all of the predictors, then estimate the variable importance scores**
 
-{r 4_3_a}
-library(randomForest)
-library(caret)
+```{r 4_3_a}
 set.seed(seed)
-model1 <- randomForest(y ~ ., data = simulated, importance = TRUE, ntree = 1000)
-importance1 <- varImp(model1) 
 
-# ... show resulting Importance values ...
+target <- simulated$y
+predictors <- simulated[,-11]
+
+mtryGrid <- data.frame(mtry = floor(seq(10, ncol(simulated)/3, length = 10)))
+model1 <-  train(predictors, target,
+                          method = "rf",
+                          tuneGrid = mtryGrid,
+                          trControl = ctrl)
+importance1 <- varImp(model1) 
+#model1
+#importance1
+imp_feat_vals <- importance1$importance$Overall
+names(imp_feat_vals) <- rownames(importance1$importance)
+rf_features <- round(sort(imp_feat_vals, decreasing = TRUE)[1:10], 2)
+rf_features
+```
 
 Did the random forest model significantly use the uninformative predictors (V6 – V10)? What do you think the impact of having uninformative predictors will be on random forest model performance?
 
-...Answer...
+The Random Forest model did an excellent job at excluding the uninformative predictors, as the variable importance score was low for those features. The scores for V6-V10 were all less than 4 importance score. Random forest also did a good job at understanding the important features as the lowest score of the important variables was 10 and the most was 100.
 
-4.3.b (10 points)
+### 4.3.b (10 points)
 
 Now add an additional predictor that is highly correlated with one of the informative predictors, V1.
 
-{r 4_3_b0}
+```{r 4_3_b0}
 simulated$duplicate1 <- simulated$V1 + rnorm(200) * .1
-cor(simulated$duplicate1, simulated$V1)
+#cor(simulated$duplicate1, simulated$V1)
+```
 
 Fit another random forest model to these data. Did the importance score for V1 change?
 
-{r 4_3_b}
-# ... code ...
+```{r 4_3_b}
+target <- simulated$y
+predictors <- simulated[,-11]
 
-...Answer...
+mtryGrid2 <- data.frame(mtry = floor(seq(10, ncol(simulated)/3, length = 10)))
+model2 <-  train(predictors, target,
+                 method = "rf",
+                 tuneGrid = mtryGrid2,
+                 trControl = ctrl)
+importance2 <- varImp(model2) 
+#model1
+#importance1
+imp_feat_vals2 <- importance2$importance$Overall
+names(imp_feat_vals2) <- rownames(importance2$importance)
+rf_features2 <- round(sort(imp_feat_vals2, decreasing = TRUE)[1:11], 2)
+rf_features2
+```
 
-What happens if you add one more predictor to the data set that is also highly correlated with V1 ( after this you should have 12 predictors, 10 original and two added correlated predictors) and fit another random forest model again to this data. Did the importance score for V1 change?
+The values of V1's importance did change as it was previously 100 importance score and in this iteration of the model it dropped to 70.99. Duplicate1 became a top 5 feature in terms of variable importance due to its similarity to V1.
 
-{r 4_3_b2}
-# ... code ...
+**What happens if you add one more predictor to the data set that is also highly correlated with V1 ( after this you should have 12 predictors, 10 original and two added correlated predictors) and fit another random forest model again to this data. Did the importance score for V1 change?**
 
-...Answer...
+```{r 4_3_b2}
+simulated$duplicate2 <- simulated$V1 + rnorm(200) * .1
+#cor(simulated$duplicate2, simulated$V1)
 
-Problem 4.4 (20 points)
+target <- simulated$y
+predictors <- simulated[,-11]
+
+mtryGrid3 <- data.frame(mtry = floor(seq(10, ncol(simulated)/3, length = 10)))
+model3 <-  train(predictors, target,
+                 method = "rf",
+                 tuneGrid = mtryGrid3,
+                 trControl = ctrl)
+importance3 <- varImp(model3) 
+imp_feat_vals3 <- importance3$importance$Overall
+names(imp_feat_vals3) <- rownames(importance3$importance)
+rf_features3 <- round(sort(imp_feat_vals3, decreasing = TRUE)[1:12], 2)
+rf_features3
+```
+
+Adding a second correlated feature did not drop V1 score like I expected, instead it raised it slightly. This is surprising to me because I thought more features would take the score lower. Reasonably though if there are features that are similar to one another, each predictor can raise each other's value up due to the high amount of predictor similarity.
+
+## Problem 4.4 (20 points)
 
 In stochastic gradient boosting the bagging fraction and learning rate will govern the construction of the trees as they are guided by the gradient. Although the optimal values of these parameters should be obtained through the tuning process, it is helpful to understand how the magnitudes of these parameters affect magnitudes of variable importance. Figure 8.24 provides the variable importance plots for boosting using two extreme values for the bagging fraction (0.1 and 0.9) and the learning rate (0.1 and 0.9) for the solubility data. The left-hand plot has both parameters set to 0.1, and the right-hand plot has both set to 0.9:
 
-4.3.a (7 points)
+![](M4-A1-APM_Figure_8_24.png)
 
-Why does the model on the right focus its importance on just the first few of predictors, whereas the model on the left spreads importance across more predictors?
+### 4.3.a (7 points)
 
-...Answer...
+**Why does the model on the right focus its importance on just the first few of predictors, whereas the model on the left spreads importance across more predictors?**
 
-4.3.b (7 points)
+The model on the right focuses its importance on the first few predictors because the combination of high shrinkage and high bagging fraction train the trees of the model to train more similarly to its previous iteration. This process selects the strongest predictors because the trees will behave more like it predecessors and therefore give only a few strong predictors. 
 
-Which model do you think would be more predictive of other samples?
+### 4.3.b (7 points)
 
-...Answer...
+**Which model do you think would be more predictive of other samples?**
 
-4.3.c (6 points)
+The model on the right is more predictive of the other samples because the bagging parameter searches more of the trees when the values increases and the trees learn from each other more quickly because they see the same data. The shrinkage factor reduces the error faster so the other predictors are not able to contribute.
 
-How would increasing interaction depth affect the slope of predictor importance for either model in the figure below?
+### 4.3.c (6 points)
 
-...Answer...
+**How would increasing interaction depth affect the slope of predictor importance for either model in the figure below?**
+
+The increase in interaction depth would increase the amount of predictors in the right model because each tree split has a higher-level interaction term with all of the other previous split predictors (Kuhn & Johnson, 2013). For the left model, having an interaction depth increase would affect the model less as it has more important predictors already. 
