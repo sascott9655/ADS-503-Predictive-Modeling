@@ -1,0 +1,309 @@
+---
+title: "Lab5"
+author: "Sam Scott"
+date: "2026-06-05"
+output: html_document
+---
+Linear Classifiers
+
+#In this module we will build linear classification models specifically applying logistic regression, linear discriminant analysis, penalized logistic regression and nearest shrunken centroids to the Wisconsin breast cancer data set. In the end we will compare the performance of these models on the breast cancer data set.
+
+```{r}
+library(caret)
+library(pROC)
+```
+
+
+```{r}
+#The data set does not have pre set headers so we make them here
+cnames <- c('Id', 'Clump_thickness', 'Uniformity_cell_size', 'Uniformity_cell_shape', 
+            'Marginal_adhesion', 'Single_e_cell_size', 'Bare_nuclei', 
+            'Bland_chromatin', 'Normal_nucleoli', 'Mitoses', 'Class')
+#applying the columns and inserting them here
+bcancerdata <- read.csv('C:/Users/samsc/Desktop/ADS-503/ADS-503-Predictive-Modeling/breast-cancer-wisconsin.data', header=FALSE, col.names = cnames)
+bcancerdata$Bare_nuclei <- as.numeric(as.character(bcancerdata$Bare_nuclei))
+
+```
+
+
+
+```{r}
+#our response variable is not in factor form which is ideal for discrete variables
+
+bcancerdata$Class <- ifelse(bcancerdata$Class == 4, "malignant", "benign")
+bcancerdata$Class <- as.factor(bcancerdata$Class)
+table(bcancerdata$Class)
+
+```
+```{r}
+str(bcancerdata)
+```
+
+```{r}
+str(bcancerdata)
+```
+
+```{r}
+summary(bcancerdata)
+```
+
+```{r}
+corrplot::corrplot(cor(bcancerdata[,1:10]))
+set.seed(100)
+```
+
+```{r}
+trainingRows <- createDataPartition(bcancerdata$Class, p=.8, list=FALSE)
+
+train <- bcancerdata[trainingRows, ]
+test <- bcancerdata[-trainingRows, ]
+
+trainimp <- preProcess(train, "knnImpute")
+trainpr <- predict(trainimp, train)
+testpr <- predict(trainimp, test)
+
+summary(trainpr)
+
+```
+
+```{r}
+summary(testpr)
+```
+
+Logistic Regression
+#Model log odds as a linear function of the predictor variables
+
+```{r}
+ctrl <- trainControl(method = "cv",
+                     summaryFunction = twoClassSummary,
+                     classProbs = TRUE,
+                     savePredictions = TRUE)
+set.seed(476)
+
+lrFit <- train(trainpr[,1:10],
+               trainpr$Class,
+               method = "glm",
+               metric = "ROC",
+               trControl = ctrl)
+lrFit
+```
+
+```{r}
+lrFit$finalModel
+```
+
+```{r}
+lrCM <- confusionMatrix(lrFit, norm = "none")
+lrCM
+```
+
+```{r}
+#plot the ROC curve for the hold-out set
+?rev
+lrRoc <- roc(response = lrFit$pred$obs,
+             predictor = lrFit$pred$malignant,
+             levels = rev(levels(lrFit$pred$obs)))
+```
+
+
+```{r}
+plot(lrRoc, legacy.axes = TRUE)
+```
+
+
+```{r}
+lrRoc$auc
+```
+
+```{r}
+lrImp <- varImp(lrFit, scale = FALSE)
+plot(lrImp)
+```
+
+```{r}
+testResults <- data.frame(obs = testpr$Class, 
+                          LR = predict(lrFit,testpr[,1:10]))
+```
+
+Linear Discriminant Analysis
+#Goal is to maximize the separability between classes
+
+```{r}
+set.seed(476)
+ldaFit <- train(trainpr[,1:10],
+                trainpr$Class,
+                method = "lda",
+                preProc = c("center", "scale"),
+                metric = "ROC",
+                trControl = ctrl)
+ldaFit
+```
+
+```{r}
+ldaFit$finalModel
+```
+
+```{r}
+ldaCM <- confusionMatrix(ldaFit, norm = "none")
+ldaCM
+```
+
+```{r}
+ldaRoc <- roc(response = ldaFit$pred$obs,
+              predictor = ldaFit$pred$malignant,
+              levels = rev(levels(ldaFit$pred$obs)))
+```
+
+```{r}
+plot(ldaRoc, legacy.axes = TRUE)
+```
+
+```{r}
+varImp(ldaFit)
+```
+
+```{r}
+testResults$LDA <- predict(ldaFit, testpr[,1:10])
+```
+
+Penalized Logistic Regression
+
+```{r}
+glmnGrid <- expand.grid(alpha = c(0, .1, .2, .4, .6, .8, 1), lambda = seq(.01, .2, length = 10))
+set.seed(476)
+glmnFit <- train(trainpr[,1:10],
+                trainpr$Class,
+                method = "glmnet",
+                tuneGrid = glmnGrid,
+                preProc = c("center", "scale"),
+                metric = "ROC",
+                trControl = ctrl)
+glmnFit
+```
+
+```{r}
+glmnFit$results
+```
+
+```{r}
+plot(glmnFit$finalModel, label = TRUE)
+```
+
+```{r}
+?coef
+??s
+coef(glmnFit$finalModel, s = 100)
+```
+
+```{r}
+coef(glmnFit$finalModel, s = 0.001)
+```
+
+```{r}
+glmnFit$finalModel$lambda
+```
+
+```{r}
+glmnFit$finalModel$tuneValue
+
+```
+
+```{r}
+glmnFit$finalModel$lambdaOpt
+
+```
+
+```{r}
+coef(glmnFit$finalModel, s = glmnFit$finalModel$lambdaOpt)
+
+```
+
+```{r}
+glmnetCM <- confusionMatrix(glmnFit, norm = "none")
+glmnetCM
+```
+```{r}
+## Plot the ROC curve for the hold-out set
+glmRoc <- roc(response = glmnFit$pred$obs,
+              predictor = glmnFit$pred$malignant,
+              levels = rev(levels(glmnFit$pred$obs)))
+
+```
+
+```{r}
+plot(glmRoc, legacy.axes = TRUE)
+```
+
+
+```{r}
+testResults$glmnet <- predict(glmnFit, testpr[, 1:10])
+```
+
+Nearest Shrunken Centroids 
+#Typically works well for high dimensional data such as RNA analysis where the number of predictors/features is much larger than number of samples.
+
+```{r}
+set.seed(476)
+nscFit <- train(trainpr[,1:10],
+                trainpr$Class,
+                method = "pam",
+                preProc = c("center", "scale"),
+                tuneGrid = data.frame(threshold = seq(0, 25,length = 30)),
+                metric = "ROC",
+                trControl = ctrl)
+
+```
+```{r}
+nscCM <- confusionMatrix(nscFit, norm = "none")
+nscCM
+
+```
+
+```{r}
+## Plot the ROC curve for the hold-out set
+nscRoc <- roc(response = nscFit$pred$obs,
+             predictor = nscFit$pred$malignant,
+             levels = rev(levels(nscFit$pred$obs)))
+```
+
+```{r}
+plot(nscRoc, legacy.axes = TRUE)
+```
+
+```{r}
+testResults$NSC <- predict(nscFit, testpr[,1:10])
+
+```
+
+Model Performance Comparison
+
+```{r}
+### Compare Models using ROC curve
+
+plot(lrRoc, type = "s", col = 'red', legacy.axes = TRUE)
+plot(ldaRoc, type = "s", add = TRUE, col = 'green', legacy.axes = TRUE)
+plot(glmRoc, type = "s", add = TRUE, col = 'blue', legacy.axes = TRUE)
+plot(nscRoc, type = "s", add = TRUE, legacy.axes = TRUE)
+legend("bottomright", legend=c("LR", "LDA", "GLMNET", "NSC"),
+       col=c("red", "green", "blue", "black"), lwd = 2)
+title(main = "Compare ROC curves from different models", outer = TRUE)
+
+```
+
+```{r}
+confusionMatrix(testResults$LR, testResults$obs, positive = "malignant")
+```
+```{r}
+confusionMatrix(testResults$LDA, testResults$obs, positive = "malignant")
+
+```
+
+```{r}
+confusionMatrix(testResults$glmnet, testResults$obs, positive = "malignant")
+
+```
+
+```{r}
+confusionMatrix(testResults$NSC, testResults$obs, positive = "malignant")
+
+```
