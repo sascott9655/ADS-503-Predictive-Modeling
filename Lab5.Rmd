@@ -54,6 +54,7 @@ set.seed(100)
 
 ```{r}
 trainingRows <- createDataPartition(bcancerdata$Class, p=.8, list=FALSE)
+bcancerdata$Class
 
 train <- bcancerdata[trainingRows, ]
 test <- bcancerdata[-trainingRows, ]

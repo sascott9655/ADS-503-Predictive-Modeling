@@ -31,9 +31,8 @@ The hepatic injury data set was described in the introductory chapter and contai
 Load the data
 
 ```{r 5_1_data}
-
 data(hepatic)
-?hepatic
+??hepatic
 ```
 
 Apply the following pre-processing steps:
@@ -59,13 +58,15 @@ The dataframes bio and chem contain the biological assay and chemical fingerprin
 
 Given the size of the dataset and the injury status distribution, describe if you would create a separate training and testing data set
 
-...Answer...
+The amount of observations in combination with the class injury status distribution, I would create a training and test data set as I believe there is enough information for a model to learn the training and enough test results to validate training model. The class distribution is not too marginally different enough to see bias in class selection.
 
 5.1.b (5 points)
 
 Which classification statistic would you choose to optimize for this exercise and why?
 
-...Answer...
+I would choose the Kappa statistic to optimize as it is great at dealing with class inbalance and specifically used for two class classification. Because our data set has either a 'Yes' or 'No' response, the Kappa statistics would be valuable to optimize due to this data set being two class classification and that the class balance is not exactly even.
+
+Kappa = (O - E) / (1 - E)
 
 5.1.c (20 points)
 
@@ -73,14 +74,49 @@ Perform appropriate pre-processing of data and build logistic regression, linear
 
 Biological predictors
 
+
 ```{r 5_1_c_bio}
-#... code
+
+low_freq_bio <- nearZeroVar(bio)
+bio <- bio[,-low_freq_bio]
+
+preProc <- preProcess()
+
+y <- outcome$any_damage
+trainingRows <- createDataPartition(y, p = .75, list=FALSE)
+
+train_bio <- bio[trainingRows,]
+test_bio <- bio[-trainingRows,]
+
+y_train <- y[trainingRows]
+y_test <- y[-trainingRows]
+
+set.seed(rseed)
+ctrl <- trainControl(method = "cv",
+                     summaryFunction = twoClassSummary,
+                     classProbs = TRUE,
+                     savePredictions = TRUE)
+```
+
+```{r}
+log_reg <- train(train_bio, y_train,
+                 method = "glm",
+                 metric = "ROC",
+                 trControl = ctrl)
+log_reg
+log_reg$finalModel
+```
+
+```{r}
+
 ```
 
 Chemical predictors
 
 ```{r 5_1_c_chem}
+
 #... code
+
 ```
 
 ```{r}
