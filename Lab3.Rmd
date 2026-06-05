@@ -216,7 +216,7 @@ plsImp <- varImp(plsTune, scale = FALSE)
 
 ```
 ```{r}
-?plotm #feature importance
+?plot #feature importance
 plot(plsImp, top = 25, scales = list(y = list(cex = .95)))
 ```
 ```{r}

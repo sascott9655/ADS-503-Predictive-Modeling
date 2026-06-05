@@ -82,9 +82,9 @@ Are there any relevant transformations of one or more predictors that might impr
 
 Hints:
 
--   Skew values less than $\pm 0.5$ should be considered 'normal enough'
--   Use \`caret::BoxCoxTrans()\` with appropriate adjustments for non-positive values.
--   Use transformations that improve skew by \>50%
+- Skew values less than $\pm 0.5$ should be considered 'normal enough'
+- Use \`caret::BoxCoxTrans()\` with appropriate adjustments for non-positive values.
+- Use transformations that improve skew by \>50%
 
 ```{r}
 # write code to evaluate the before and after skew characteristics, and select variables to transform (with before/after evaluation metrics). 
