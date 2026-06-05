@@ -75,14 +75,15 @@ Logistic Regression
 
 ```{r}
 ctrl <- trainControl(method = "cv",
-                     summaryFunction = twoClassSummary,
-                     classProbs = TRUE,
+                     summaryFunction = twoClassSummary, #ROC metric is associated
+                     #with twoClassSummary (area under ROC curve)
+                     classProbs = TRUE, #print/show class probabilities
                      savePredictions = TRUE)
 set.seed(476)
 
 lrFit <- train(trainpr[,1:10],
                trainpr$Class,
-               method = "glm",
+               method = "glm", #generalize linear model
                metric = "ROC",
                trControl = ctrl)
 lrFit
@@ -191,12 +192,11 @@ plot(glmnFit$finalModel, label = TRUE)
 
 ```{r}
 ?coef
-??s
-coef(glmnFit$finalModel, s = 100)
+coef(glmnFit$finalModel, s = 100) #s corresponds to lambda (lambda value)
 ```
 
 ```{r}
-coef(glmnFit$finalModel, s = 0.001)
+coef(glmnFit$finalModel, s = 0.001) 
 ```
 
 ```{r}
@@ -249,8 +249,9 @@ nscFit <- train(trainpr[,1:10],
                 method = "pam",
                 preProc = c("center", "scale"),
                 tuneGrid = data.frame(threshold = seq(0, 25,length = 30)),
+                #threshold is the shrinkage parameter
                 metric = "ROC",
-                trControl = ctrl)
+                trControl = ctrl) #threshold value is chosen based on ROC
 
 ```
 ```{r}
