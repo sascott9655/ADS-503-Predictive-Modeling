@@ -76,11 +76,16 @@ Biological predictors
 
 
 ```{r 5_1_c_bio}
-
+#Getting rid of nearZeroVar #82 were removed
 low_freq_bio <- nearZeroVar(bio)
 bio <- bio[,-low_freq_bio]
 
-preProc <- preProcess()
+# removing high correlation variables #21 were removed
+bio_cor <- cor(bio)
+high_bio_cor <- findCorrelation(bio_cor, cutoff = .75)
+#length(high_bio_cor)
+bio <- bio[, -high_bio_cor]
+#corrplot::corrplot(cor(bio))
 
 y <- outcome$any_damage
 trainingRows <- createDataPartition(y, p = .75, list=FALSE)
@@ -91,7 +96,6 @@ test_bio <- bio[-trainingRows,]
 y_train <- y[trainingRows]
 y_test <- y[-trainingRows]
 
-set.seed(rseed)
 ctrl <- trainControl(method = "cv",
                      summaryFunction = twoClassSummary,
                      classProbs = TRUE,
@@ -99,12 +103,13 @@ ctrl <- trainControl(method = "cv",
 ```
 
 ```{r}
+set.seed(rseed)
 log_reg <- train(train_bio, y_train,
                  method = "glm",
                  metric = "ROC",
                  trControl = ctrl)
 log_reg
-log_reg$finalModel
+#log_reg$finalModel
 ```
 
 ```{r}
