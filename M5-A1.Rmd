@@ -19,7 +19,7 @@ library(caret)
 library(tidyverse)
 library(gt)
 library(AppliedPredictiveModeling)
-# ... add additional libraries here ...
+library(pROC)
 
 rseed <- 503
 ```
@@ -32,7 +32,6 @@ Load the data
 
 ```{r 5_1_data}
 data(hepatic)
-??hepatic
 ```
 
 Apply the following pre-processing steps:
@@ -49,7 +48,7 @@ outcome |> count(any_damage) |>
     gt() |> 
     grand_summary_rows(columns = n,
                  fns = list(total = ~sum(.))
-  )
+)
 ```
 
 The dataframes bio and chem contain the biological assay and chemical fingerprint predictors for the 281 compounds, while the factor variable injury contains the liver damage classification for each compound.
@@ -64,7 +63,7 @@ The amount of observations in combination with the class injury status distribut
 
 Which classification statistic would you choose to optimize for this exercise and why?
 
-I would choose the Kappa statistic to optimize as it is great at dealing with class inbalance and specifically used for two class classification. Because our data set has either a 'Yes' or 'No' response, the Kappa statistics would be valuable to optimize due to this data set being two class classification and that the class balance is not exactly even.
+I would choose the Kappa statistic to optimize as it is great at dealing with class imbalance and specifically used for two class classification. Because our data set has either a 'Yes' or 'No' response, the Kappa statistics would be valuable to optimize due to this data set being two class classification and that the class balance is not exactly even.
 
 Kappa = (O - E) / (1 - E)
 
@@ -74,20 +73,17 @@ Perform appropriate pre-processing of data and build logistic regression, linear
 
 Biological predictors
 
-
+#Pre process of bio data
 ```{r 5_1_c_bio}
-#Getting rid of nearZeroVar #82 were removed
-low_freq_bio <- nearZeroVar(bio)
-bio <- bio[,-low_freq_bio]
-
-# removing high correlation variables #21 were removed
-bio_cor <- cor(bio)
-high_bio_cor <- findCorrelation(bio_cor, cutoff = .75)
-#length(high_bio_cor)
-bio <- bio[, -high_bio_cor]
-#corrplot::corrplot(cor(bio))
-
 y <- outcome$any_damage
+
+nzv_bio <- nearZeroVar(bio)
+bio <- bio[,-nzv_bio]
+
+correlations <- cor(bio)
+highCorr <- findCorrelation(correlations, cutoff = .75)
+bio <- bio[,-highCorr]
+
 trainingRows <- createDataPartition(y, p = .75, list=FALSE)
 
 train_bio <- bio[trainingRows,]
@@ -102,45 +98,156 @@ ctrl <- trainControl(method = "cv",
                      savePredictions = TRUE)
 ```
 
+Logistic Regression
+
 ```{r}
 set.seed(rseed)
-log_reg <- train(train_bio, y_train,
+log_reg <- suppressWarnings(train(train_bio, y_train,
                  method = "glm",
                  metric = "ROC",
-                 trControl = ctrl)
-log_reg
-#log_reg$finalModel
+                 trControl = ctrl))
+#log_reg
+```
+
+Linear Discriminant Analysis 
+
+```{r}
+set.seed(rseed)
+ldaFit <- train(train_bio,
+                y_train,
+                method = "lda",
+                preProc = c("center", "scale"),
+                metric = "ROC",
+                trControl = ctrl)
+#ldaFit
+```
+
+Penalized Logistic Regression
+
+```{r}
+glmnGrid <- expand.grid(alpha = c(0, .1, .2, .4, .6, .8, 1), lambda = seq(.01, .2, length = 10))
+set.seed(rseed)
+glmnFit <- train(train_bio,
+                y_train,
+                method = "glmnet",
+                tuneGrid = glmnGrid,
+                preProc = c("center", "scale"),
+                metric = "ROC",
+                trControl = ctrl)
+#glmnFit
 ```
 
 ```{r}
-
+set.seed(rseed)
+nscFit <- train(train_bio,
+                y_train,
+                method = "pam",
+                preProc = c("center", "scale"),
+                tuneGrid = data.frame(threshold = seq(0, 25,length = 30)),
+                #threshold is the shrinkage parameter
+                metric = "ROC",
+                trControl = ctrl) #threshold value is chosen based on ROC
+#nscFit
 ```
 
 Chemical predictors
 
 ```{r 5_1_c_chem}
+nzv_chem <- nearZeroVar(chem)
+chem <- chem[,-nzv_chem]
 
-#... code
+correlations2 <- cor(chem)
+highCorr2 <- findCorrelation(correlations2, cutoff = .75)
+chem <- chem[,-highCorr2]
 
+train_chem <- chem[trainingRows,]
+test_chem <- chem[-trainingRows,]
 ```
 
+Logistic Regression
+
 ```{r}
-# ... summary table comparing bio and chem ROC between models
+set.seed(rseed)
+log_reg2 <- suppressWarnings(train(train_chem, y_train,
+                 method = "glm",
+                 metric = "ROC",
+                 trControl = ctrl))
+#log_reg2
+```
+
+Linear Discriminant Analysis
+
+```{r}
+set.seed(rseed)
+ldaFit2 <- suppressWarnings(train(train_chem,
+                y_train,
+                method = "lda",
+                preProc = c("center", "scale"),
+                metric = "ROC",
+                trControl = ctrl))
+#ldaFit2
+```
+
+Penalized Logistic Regression
+
+```{r}
+set.seed(rseed)
+glmnFit2 <- train(train_chem,
+                y_train,
+                method = "glmnet",
+                tuneGrid = glmnGrid,
+                preProc = c("center", "scale"),
+                metric = "ROC",
+                trControl = ctrl)
+#glmnFit2
+```
+
+Nearest Shrunken Centroid
+
+```{r}
+set.seed(rseed)
+nscFit2 <- train(train_chem,
+                y_train,
+                method = "pam",
+                preProc = c("center", "scale"),
+                tuneGrid = data.frame(threshold = seq(0, 25,length = 30)),
+                #threshold is the shrinkage parameter
+                metric = "ROC",
+                trControl = ctrl) #threshold value is chosen based on ROC
+#nscFit2
+```
+
+
+```{r}
+train_metrics <- resamples(list(Log_Reg_Bio=log_reg, LDA_Bio=ldaFit, Penalized_Log_Bio =glmnFit,NSC_Bio = nscFit, Log_Reg_Chem=log_reg2, LDA_Chem=ldaFit2, Penalized_Log_Chem=glmnFit2,NSC_Chem = nscFit2))
+summary(train_metrics)
 ```
 
 Which model has the best predictive ability for the biological predictors, and what is the optimal performance? Which model has the best predictive ability for the chemical predictors, and what is the optimal performance? Based on these results, which set of predictors (biological or chemical) contains the most information about hepatic toxicity?
 
-...Answer...
+The model with the best predictive ability for biological predictors is the nearest shrunken centroids model with a ROC mean score of 0.55. The model with the best predictive ability for chemical predictors is the penalized logistic regression with a ROC mean score of 0.66. The chemical predictors had a better prediction on determining hepatic toxicity across all models as all models mean ROC scores were higher than the biological models.
 
 5.1.d (5 points)
 
 For the optimal models for both the biological and chemical predictors, what are the top five important predictors?
 
 ```{r 5_1_d}
-#... code
-```
+#Best model for biological predictors
+print("Biological Nearest Shrunken Centroid:")
+nscImp <- varImp(nscFit, scale = TRUE)
+vals <- nscImp$importance$Yes
+names(vals) <- rownames(nscImp$importance)
+top5_bio <- round(sort(vals, decreasing = TRUE)[1:5], 3)
+top5_bio
 
-...Answer (optional unless not output by table)
+#Best model for chemical predictors
+print("Chemical Penality Logistic Regression:")
+glmnFit2Imp <- varImp(glmnFit2, scale = TRUE)
+vals2 <- glmnFit2Imp$importance$Overall
+names(vals2) <- rownames(glmnFit2Imp$importance)
+top5_chem <- round(sort(vals2, decreasing = TRUE)[1:5], 3)
+top5_chem
+```
 
 5.1.e (20 points)
 
@@ -149,26 +256,99 @@ Combined predictors
 Now combine the biological and chemical fingerprint predictors into one predictor set. Retrain the same set of predictive models you built from part (c).
 
 ```{r 5_1_e}
-#... code
+combined <- cbind(bio, chem)
+#combined
+
+nzv_combined <- nearZeroVar(combined)
+combined <- combined[,-nzv_bio]
+
+train_combined <- combined[trainingRows,]
+test_combined <- combined[-trainingRows,]
 ```
+
+```{r}
+set.seed(rseed)
+log_reg3 <- suppressWarnings(train(train_combined, y_train,
+                 method = "glm",
+                 metric = "ROC",
+                 trControl = ctrl))
+#log_reg3
+```
+
+```{r}
+set.seed(rseed)
+ldaFit3 <- suppressWarnings(train(train_combined,
+                y_train,
+                method = "lda",
+                preProc = c("center", "scale"),
+                metric = "ROC",
+                trControl = ctrl))
+#ldaFit3
+```
+
+```{r}
+set.seed(rseed)
+glmnFit3 <- train(train_combined,
+                y_train,
+                method = "glmnet",
+                tuneGrid = glmnGrid,
+                preProc = c("center", "scale"),
+                metric = "ROC",
+                trControl = ctrl)
+#glmnFit3
+```
+
+```{r}
+set.seed(rseed)
+nscFit3 <- train(train_combined,
+                y_train,
+                method = "pam",
+                preProc = c("center", "scale"),
+                tuneGrid = data.frame(threshold = seq(0, 25,length = 30)),
+                #threshold is the shrinkage parameter
+                metric = "ROC",
+                trControl = ctrl) #threshold value is chosen based on ROC
+#nscFit3
+```
+
+```{r}
+train_metrics2 <- resamples(list(Log_Reg_Comb=log_reg3, LDA_Comb=ldaFit3, Penalized_Log_Comb=glmnFit3,NSC_Comb= nscFit3))
+summary(train_metrics2)
+```
+
 
 Which model yields the best predictive performance?
 
-...Answer...
+The model that yielded the best predictive performance is the nearest shrunken
+centroid model with a mean ROC score of 0.625.
 
 Is the model performance better than either of the best models from part (c)?
 
-...Answer...
+The Penalized Log Chemical model performed slightly better than combine nearest
+shrunken centroid model with a mean ROC score of 0.64. However the combined NSC
+model did perform better than a large majority of chemical and biological models.
 
 What are the top five important predictors for the optimal model?
 
 ```{r 5_1_e_imp}
-#...code
+print("Combined Nearest Shrunken Centroid:")
+nscImp2 <- varImp(nscFit3, scale = TRUE)
+vals3 <- nscImp2$importance$Yes
+names(vals3) <- rownames(nscImp2$importance)
+top5_combined <- round(sort(vals3, decreasing = TRUE)[1:5], 3)
+top5_combined
 ```
 
 How do these compare with the optimal predictors from each individual predictor set?
 
-...Answer...
+The combined nearest shrunken centroid model 
+importance values compares more closely to the biological NSC model. That makes
+sense since they are both using the same model algorithm to retrieve data
+importance. However the combined NSC model has almost all distinct variables that
+appear in the top5 with exception to Z157 which shows up in both models. This
+proves that even though the combined model is showing variable importance scores
+more similarly to the biological model, that chemical data is showing its 
+influence on the combined model.
 
 5.1.f (5 points)
 
