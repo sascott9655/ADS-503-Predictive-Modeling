@@ -232,10 +232,22 @@ The model with the best predictive ability for biological predictors is the near
 For the optimal models for both the biological and chemical predictors, what are the top five important predictors?
 
 ```{r 5_1_d}
-#... code
-```
+#Best model for biological predictors
+print("Biological Nearest Shrunken Centroid:")
+nscImp <- varImp(nscFit, scale = TRUE)
+vals <- nscImp$importance$Yes
+names(vals) <- rownames(nscImp$importance)
+top5_bio <- round(sort(vals, decreasing = TRUE)[1:5], 3)
+top5_bio
 
-...Answer (optional unless not output by table)
+#Best model for chemical predictors
+print("Chemical Penality Logistic Regression:")
+glmnFit2Imp <- varImp(glmnFit2, scale = TRUE)
+vals2 <- glmnFit2Imp$importance$Overall
+names(vals2) <- rownames(glmnFit2Imp$importance)
+top5_chem <- round(sort(vals2, decreasing = TRUE)[1:5], 3)
+top5_chem
+```
 
 5.1.e (20 points)
 
@@ -244,26 +256,99 @@ Combined predictors
 Now combine the biological and chemical fingerprint predictors into one predictor set. Retrain the same set of predictive models you built from part (c).
 
 ```{r 5_1_e}
-#... code
+combined <- cbind(bio, chem)
+#combined
+
+nzv_combined <- nearZeroVar(combined)
+combined <- combined[,-nzv_bio]
+
+train_combined <- combined[trainingRows,]
+test_combined <- combined[-trainingRows,]
 ```
+
+```{r}
+set.seed(rseed)
+log_reg3 <- suppressWarnings(train(train_combined, y_train,
+                 method = "glm",
+                 metric = "ROC",
+                 trControl = ctrl))
+#log_reg3
+```
+
+```{r}
+set.seed(rseed)
+ldaFit3 <- suppressWarnings(train(train_combined,
+                y_train,
+                method = "lda",
+                preProc = c("center", "scale"),
+                metric = "ROC",
+                trControl = ctrl))
+#ldaFit3
+```
+
+```{r}
+set.seed(rseed)
+glmnFit3 <- train(train_combined,
+                y_train,
+                method = "glmnet",
+                tuneGrid = glmnGrid,
+                preProc = c("center", "scale"),
+                metric = "ROC",
+                trControl = ctrl)
+#glmnFit3
+```
+
+```{r}
+set.seed(rseed)
+nscFit3 <- train(train_combined,
+                y_train,
+                method = "pam",
+                preProc = c("center", "scale"),
+                tuneGrid = data.frame(threshold = seq(0, 25,length = 30)),
+                #threshold is the shrinkage parameter
+                metric = "ROC",
+                trControl = ctrl) #threshold value is chosen based on ROC
+#nscFit3
+```
+
+```{r}
+train_metrics2 <- resamples(list(Log_Reg_Comb=log_reg3, LDA_Comb=ldaFit3, Penalized_Log_Comb=glmnFit3,NSC_Comb= nscFit3))
+summary(train_metrics2)
+```
+
 
 Which model yields the best predictive performance?
 
-...Answer...
+The model that yielded the best predictive performance is the nearest shrunken
+centroid model with a mean ROC score of 0.625.
 
 Is the model performance better than either of the best models from part (c)?
 
-...Answer...
+The Penalized Log Chemical model performed slightly better than combine nearest
+shrunken centroid model with a mean ROC score of 0.64. However the combined NSC
+model did perform better than a large majority of chemical and biological models.
 
 What are the top five important predictors for the optimal model?
 
 ```{r 5_1_e_imp}
-#...code
+print("Combined Nearest Shrunken Centroid:")
+nscImp2 <- varImp(nscFit3, scale = TRUE)
+vals3 <- nscImp2$importance$Yes
+names(vals3) <- rownames(nscImp2$importance)
+top5_combined <- round(sort(vals3, decreasing = TRUE)[1:5], 3)
+top5_combined
 ```
 
 How do these compare with the optimal predictors from each individual predictor set?
 
-...Answer...
+The combined nearest shrunken centroid model 
+importance values compares more closely to the biological NSC model. That makes
+sense since they are both using the same model algorithm to retrieve data
+importance. However the combined NSC model has almost all distinct variables that
+appear in the top5 with exception to Z157 which shows up in both models. This
+proves that even though the combined model is showing variable importance scores
+more similarly to the biological model, that chemical data is showing its 
+influence on the combined model.
 
 5.1.f (5 points)
 
