@@ -1,0 +1,512 @@
+---
+title: "Lab6"
+author: "Samuel Scott"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Non-Linear Classifiers and Tree based Classifiers
+
+In this lab session we will build nonlinear classification models. We will apply mixture discriminant analysis, single hidden layer neural networks, support vector machines, k-nearest neighbors and tree based models such as random forests and boosting to the wisconsin breast cancer data set. In the end we will compare the performance of these models on the breast cancer data set.
+
+
+```{r}
+cnames <- c('Id', "Clump_thickness", 'Uniformity_cell_size', 'Uniformity_cell_shape', 'Marginal_adhesion', 'Single_e_cell_size', 'Bare_nuclei', 'Bland_chromatin', 'Normal_nucleoli', 'Mitoses', 'Class')
+bcancerdata <- read.csv('C:/Users/samsc/Desktop/ADS-503/ADS-503-Predictive-Modeling/breast-cancer-wisconsin.data', header = FALSE, col.names = cnames)
+bcancerdata$Bare_nuclei <- as.numeric(as.character(bcancerdata$Bare_nuclei))
+```
+
+```{r}
+bcancerdata$Class <- ifelse(bcancerdata$Class == 4, "malignant", "benign")
+bcancerdata$Class <- as.factor(bcancerdata$Class)
+table(bcancerdata$Class)
+```
+
+```{r}
+str(bcancerdata)
+```
+
+```{r}
+summary(bcancerdata)
+```
+
+```{r}
+corrplot::corrplot(cor(bcancerdata[,1:10]))
+
+set.seed(100)
+library(caret)
+library(pROC)
+```
+
+```{r}
+trainingRows <- createDataPartition(bcancerdata$Class, p = .80, list = FALSE) 
+
+# Subset the data into training and testing.
+train <- bcancerdata[trainingRows, ]
+test <- bcancerdata[-trainingRows, ]
+
+trainimp <- preProcess(train, "knnImpute")
+trainpr <- predict(trainimp, train)
+testpr <- predict(trainimp, test)
+
+summary(trainpr)
+```
+
+```{r}
+summary(testpr)
+```
+#Mixture Discriminant Analysis
+
+Each class is modeled as a mixture of distributions with different means but the same covariance structure. All classes can have different covariance structures and also each class may be a mixture of different number of distributions.
+```{r}
+ctrl <- trainControl(method="cv",
+                     summaryFunction = twoClassSummary, classProbs = TRUE, savePredictions = TRUE)
+
+set.seed(476)
+
+mdaFit <- train(trainpr[,1:10],
+                y = trainpr$Class,
+                method ="mda",
+                tuneGrid = expand.grid(subclasses=1:3),
+                metric="ROC",
+                trControl = ctrl)
+mdaFit
+```
+```{r}
+mdaFit$finalModel
+```
+```{r}
+mdaCM <- confusionMatrix(mdaFit, norm = "none")
+mdaCM
+```
+
+
+```{r}
+mdaRoc <- roc(response = mdaFit$pred$obs,
+              predictor = mdaFit$pred$malignant, levels = rev(levels(mdaFit$pred$obs)))
+```
+
+```{r}
+plot(mdaRoc, legacy.axes = TRUE)
+```
+```{r}
+mdaRoc$auc
+```
+```{r}
+mdaImp <- varImp(mdaFit, scale = FALSE)
+plot(mdaImp)
+```
+
+```{r}
+testResults <- data.frame(obs = testpr$Class, mda = predict(mdaFit, testpr[,1:10]))
+testResults
+```
+
+#Single hidden layer neural network
+
+Neural networks for classification use cross entropy as loss function instead of mean squared error loss function that was used for regression. Backpropogation is the algorithm that is used to estimate the coefficients of a Neural network model. For a single hidden layer neural network, we have two tuning parameters, number of hidden units and decay parameters that controls regularization. 
+
+```{r}
+set.seed(476)
+
+nnetGrid <- expand.grid(size=1:3, decay=c(0,0.1,0.2,0.3,0.4,0.5,1,2))
+
+nnetFit <- train(x = trainpr[,1:10],
+                 trainpr$Class,
+                 method="nnet",
+                 tuneGrid = nnetGrid,
+                 metric = "ROC",
+                 trace = FALSE,
+                 maxit = 2000,
+                 trControl = ctrl)
+nnetFit
+```
+
+```{r}
+nnetFit$finalModel
+```
+```{r}
+nnetCM <- confusionMatrix(nnetFit, norm ="none")
+nnetCM 
+```
+
+```{r}
+nnetRoc <- roc(response = nnetFit$pred$obs,
+               predictor = nnetFit$pred$malignant,
+               levels = rev(levels(nnetFit$pred$obs)))
+```
+```{r}
+plot(nnetRoc, legacy.axes = TRUE)
+```
+
+```{r}
+nnetRoc$auc
+```
+```{r}
+nnetImp <- varImp(nnetFit, scale=FALSE)
+plot(nnetImp)
+```
+
+```{r}
+testResults$nnet <- predict(nnetFit, testpr[,1:10])
+```
+
+#Support Vector Machines
+Cost is applied on errors not on the coefficients in the SVM. Errors are training set data points that are on or the wrong side of the decision boundary. To separate nonlinear data we use kernel functions that map data into higher dimensions where the data could be linearly separated.
+
+```{r}
+sigmaEst <- kernlab::sigest(as.matrix(trainpr[,1:10]))
+svmgrid <- expand.grid(sigma = sigmaEst, C = 2^seq(-4,+4))
+
+set.seed(476)
+
+svmRFit <- train(trainpr[,1:10],
+                 trainpr$Class,
+                 method ="svmRadial",
+                 tuneGrid = svmgrid,
+                 metric = "ROC",
+                 trControl = ctrl)
+svmRFit
+```
+
+```{r}
+svmRFit$finalModel
+```
+
+```{r}
+svmRCM <- confusionMatrix(svmRFit, norm = "none")
+svmRCM
+```
+
+```{r}
+## Plot the ROC curve for the hold-out set
+svmRRoc <- roc(response = svmRFit$pred$obs,
+              predictor = svmRFit$pred$malignant,
+              levels = rev(levels(svmRFit$pred$obs)))
+```
+
+```{r}
+plot(svmRRoc, legacy.axes = TRUE)
+```
+
+```{r}
+svmRRoc$auc
+```
+
+```{r}
+svmRImp <- varImp(svmRFit, scale = FALSE)
+plot(svmRImp)
+```
+
+```{r}
+testResults$svmR <- predict(svmRFit, testpr[,1:10])
+```
+
+#K-Nearest Neighbors
+Classification is done by majority voting from the k nearest neighbors. Ties are broken by checking the k+1 closest training data point.
+
+
+```{r}
+set.seed(476)
+knnFit <- train(trainpr[,1:10],
+                trainpr$Class,
+                method = "knn",
+                tuneLength = 20,
+                metric = "ROC",
+                trControl = ctrl)
+knnFit
+```
+
+```{r}
+knnFit$finalModel
+```
+
+```{r}
+knnCM <- confusionMatrix(knnFit, norm = "none")
+knnCM
+```
+
+
+```{r}
+## Plot the ROC curve for the hold-out set
+knnRoc <- roc(response = knnFit$pred$obs,
+              predictor = knnFit$pred$malignant,
+              levels = rev(levels(knnFit$pred$obs)))
+```
+
+```{r}
+plot(knnRoc, legacy.axes = TRUE)
+```
+
+```{r}
+knnRoc$auc
+```
+
+```{r}
+knnImp <- varImp(knnFit, scale = FALSE)
+plot(knnImp)
+```
+```{r}
+testResults$knn <- predict(knnFit, testpr[,1:10])
+```
+
+
+
+Model performance comparison between non-linear classifiers
+
+```{r}
+### Compare Models using ROC curve
+
+plot(mdaRoc, type = "s",
+     col = "red", legacy.axes = TRUE)
+plot(nnetRoc, type = "s", add = TRUE, col= "green", legacy.axes = TRUE)
+plot(svmRRoc, type = 's', add = TRUE, col ="blue", legacy.axes = TRUE)
+plot(knnRoc, type = 's', add = TRUE, legacy.axes = TRUE)
+legend("bottomright", legend=c("MDA", "NNET", "SVM", "KNN"),col=c("red", "green", "blue", "black"), lwd = 2)
+title(main = "Compare ROC curves from different models")
+```
+```{r}
+confusionMatrix(testResults$mda, testResults$obs, positive = "malignant")
+```
+
+```{r}
+confusionMatrix(testResults$nnet, testResults$obs, positive = "malignant")
+```
+
+```{r}
+confusionMatrix(testResults$svmR, testResults$obs, positive = "malignant")
+```
+
+```{r}
+confusionMatrix(testResults$knn, testResults$obs, positive = "malignant")
+```
+Decision Trees
+
+```{r}
+set.seed(476)
+rpartFit <- train(trainpr[, 1:10],
+                  trainpr$Class,
+                  method="rpart",
+                  tuneLength = 30,
+                  metric = "ROC",
+                  trControl = ctrl)
+rpartFit
+```
+
+```{r}
+rpartFit$finalModel
+```
+
+```{r}
+rpartCM <- confusionMatrix(rpartFit, norm = "none")
+rpartCM
+```
+
+```{r}
+rpartRoc <- roc(response = rpartFit$pred$obs,
+                predictor = rpartFit$pred$malignant,
+                levels = rev(levels(rpartFit$pred$obs)))
+```
+
+```{r}
+plot(rpartRoc, legacy.axes = TRUE)
+```
+
+```{r}
+rpartRoc$auc
+```
+
+
+```{r}
+rpartImp <- varImp(rpartFit, scale = FALSE)
+plot(rpartImp)
+```
+```{r}
+testResults$rpart <- predict(rpartFit, testpr[,1:10])
+```
+
+Bagged Trees
+
+```{r}
+set.seed(476)
+
+treebagFit <- train(trainpr[,1:10],
+                    trainpr$Class,
+                    method= "treebag",
+                    nbagg = 50,
+                    metric = "ROC",
+                    trControl = ctrl)
+treebagFit
+```
+
+
+```{r}
+treebagFit$finalModel
+```
+
+```{r}
+treebagCM <- confusionMatrix(treebagFit, norm="none")
+treebagCM
+```
+```{r}
+treebagRoc <- roc(response = treebagFit$pred$obs,
+predictor = treebagFit$pred$malignant,
+levels = rev(levels(treebagFit$pred$obs)))
+```
+
+```{r}
+plot(treebagRoc, legacy.axes = TRUE)
+```
+
+```{r}
+treebagRoc$auc
+```
+
+```{r}
+treebagImp <- varImp(treebagFit, scale = FALSE)
+plot(treebagImp)
+
+```
+```{r}
+testResults$treebag <- predict(treebagFit, testpr[,1:10])
+```
+
+Random Forest Trees
+
+```{r}
+mtryValues <- seq(1,10,1)
+
+set.seed(476)
+
+rfFit <- train(trainpr[,1:10],
+               trainpr$Class,
+               method = "rf",
+               tuneGrid = data.frame(mtry = mtryValues),
+               ntree = 1000,
+               metric = "ROC",
+               trControl = ctrl)
+rfFit
+```
+```{r}
+rfFit$finalModel
+```
+
+```{r}
+rfCM <- confusionMatrix(rfFit, norm = 'none')
+rfCM
+```
+
+```{r}
+rfRoc <- roc(response = rfFit$pred$obs,
+              predictor = rfFit$pred$malignant,
+              levels = rev(levels(rfFit$pred$obs)))
+```
+
+```{r}
+plot(rfRoc, legacy.axes = TRUE)
+```
+```{r}
+rfRoc$auc
+```
+
+```{r}
+rfImp <- varImp(rfFit, scale = FALSE)
+plot(rfImp)
+```
+```{r}
+testResults$rf <- predict(rfFit, testpr[,1:10])
+```
+
+Boosted Trees
+
+```{r}
+gbmGrid <- expand.grid(interaction.depth = c(1,3,5,7,9),
+                       n.trees = (1:20)*100,
+                       shrinkage = c(.01, .1),
+                       n.minobsinnode = 5)#number of observations in node
+
+set.seed(476)
+
+gbmFit <- train(trainpr[,1:10],
+                trainpr$Class,
+                method ="gbm",
+                tuneGrid=gbmGrid,
+                verbose=FALSE,
+                metric ="ROC",
+                trControl = ctrl)
+gbmFit
+```
+
+```{r}
+gbmFit$finalModel
+```
+
+```{r}
+gbmCM <- confusionMatrix(gbmFit, norm="none")
+gbmCM
+```
+
+```{r}
+gbmRoc <- roc(response = gbmFit$pred$obs,
+              predictor = gbmFit$pred$malignant,
+              levels = rev(levels(gbmFit$pred$obs)))
+```
+
+```{r}
+plot(gbmRoc, legacy.axes = TRUE)
+```
+
+```{r}
+gbmRoc$auc
+```
+
+```{r}
+library(gbm)
+```
+
+```{r}
+gbmImp <- varImp(gbmFit, scale = FALSE)
+plot(gbmImp)
+```
+
+```{r}
+testResults$gbm <- predict(gbmFit, testpr[,1:10])
+```
+
+Model Performance Comparison between tree based classifiers
+
+```{r}
+### Compare Models using ROC curve
+
+plot(rpartRoc, type = "s", col = 'red', legacy.axes = TRUE)
+plot(treebagRoc, type = "s", add = TRUE, col = 'green', legacy.axes = TRUE)
+plot(rfRoc, type = "s", add = TRUE, col = 'blue', legacy.axes = TRUE)
+plot(gbmRoc, type = "s", add = TRUE, legacy.axes = TRUE)
+legend("bottomright", legend = c("Rpart", "Treebag", "RandomForest", "Boosting"),
+       col = c("red", "green","blue", "black"), lwd = 2)
+title(main = "Compare ROC curves from different models")
+```
+
+```{r}
+confusionMatrix(testResults$rpart, testResults$obs, positive = "malignant")
+```
+
+```{r}
+confusionMatrix(testResults$treebag, testResults$obs, positive = "malignant")
+```
+
+```{r}
+confusionMatrix(testResults$rf, testResults$obs, positive = "malignant")
+```
+
+```{r}
+confusionMatrix(testResults$gbm, testResults$obs, positive = "malignant")
+```
+
+```{r}
+confusionMatrix(testResults$nnet, testResults$obs, positive = "malignant")
+```

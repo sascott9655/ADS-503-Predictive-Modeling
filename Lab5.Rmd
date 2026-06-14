@@ -255,6 +255,7 @@ nscFit <- train(trainpr[,1:10],
                 trControl = ctrl) #threshold value is chosen based on ROC
 
 ```
+
 ```{r}
 nscCM <- confusionMatrix(nscFit, norm = "none")
 nscCM
