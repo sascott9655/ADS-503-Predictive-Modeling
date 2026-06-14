@@ -1,0 +1,65 @@
+---
+title: "M6-A1"
+author: "Sam Scott"
+date: "2026-06-14"
+output: html_document
+---
+```{r}
+library(caret)
+```
+
+
+#1.KNN dataset
+
+```{r}
+knn_train <- data.frame(
+  x1 = c(1:6),
+  x2 = c(2:7),
+  x3 = c(30, 40, 50, 60, 70, 80),
+  Class = c('A', 'B', 'A', 'B','B', 'A')
+)
+
+knn_test <- data.frame(
+  x1 = c(9,7,8),
+  x2 = c(4,8,7),
+  x3 = c(15,45,75)
+)
+```
+
+#a) Perform the analysis WITHOUT doing any preprocessing of the data. (5 points)
+
+```{r}
+#no resampling
+no_resample <- trainControl(method = "none")
+
+knn <- train(Class ~ .,
+                  knn_train,
+                  method = "knn",
+                  tuneGrid = data.frame(k = 3),
+                  trControl = no_resample
+                  )
+pred_wthout <- predict(knn, knn_test)
+pred_wthout
+```
+#b)	Perform the analysis WITH appropriate preprocessing of the data. (8 points)
+
+```{r}
+#no resampling
+no_resample <- trainControl(method = "none")
+
+knn2 <- train(Class ~ .,
+                  knn_train,
+                  method = "knn",
+                  tuneGrid = data.frame(k = 3),
+                  preProcess = c("center", "scale"),
+                  trControl = no_resample
+                  )
+pred_wth <- predict(knn2, knn_test)
+pred_wth
+```
+#c) Do you observe any differences between the predictions with and without preprocessing? (2 points)
+
+The differences between the predictions with and without preprocessing occur in the first test sample (9, 4, 15). The without preprocess knn model predicted class A while the preprocess knn model predicted class B.  
+
+
+
