@@ -141,4 +141,13 @@ test_bag_vector <- c(0,1,1,0,0,1,1)
 
 cos_sim <- cbind(money, free, `for`, gambling, fun, machine, learning, test_bag_vector)
 cos_calculations <- cosine(cos_sim)
+training_emails <- cos_calculations[,ncol(cos_calculations)][1:5]
+#str(training_emails)
+three_closest_neighbors <-order(training_emails, decreasing = TRUE)[1:3]
+bool_vector  <- train_bag$spam[three_closest_neighbors]
+#bool_vector
+numeric_vector <-as.numeric(bool_vector)
+#numeric_vector
+prediction_cos_sim <- ifelse(sum(numeric_vector) >= 2, TRUE, FALSE)
+prediction_cos_sim
 ```
