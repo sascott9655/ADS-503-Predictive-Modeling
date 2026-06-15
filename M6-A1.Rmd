@@ -7,7 +7,10 @@ output: html_document
 ```{r}
 library(caret)
 library(kknn)
-library(lsa)
+library(lsa) #cosine similarity
+library(e1071) #naive bayes
+library(caTools)
+seed <- 756
 ```
 
 
@@ -33,7 +36,7 @@ knn_test <- data.frame(
 ```{r}
 #no resampling
 no_resample <- trainControl(method = "none")
-
+set.seed(seed)
 knn <- train(Class ~ .,
                   knn_train,
                   method = "knn",
@@ -48,7 +51,7 @@ pred_wthout
 ```{r}
 #no resampling
 no_resample <- trainControl(method = "none")
-
+set.seed(seed)
 knn2 <- train(Class ~ .,
                   knn_train,
                   method = "knn",
@@ -98,7 +101,7 @@ test_bag <- data.frame(
 #made spam a factor
 train_bag$spam<-as.factor(train_bag$spam)
 #train_bag$spam
-
+set.seed(seed)
 bagofwordsmodel <- kknn(spam ~ ., train_bag, test_bag, k=1, distance = 2)
 
 #Look up fitted.values for predicting on kknn
@@ -108,6 +111,7 @@ pred_bag
 #b)	What target level would a k-NN model with k = 3 and using Euclidean distance return for the same query? (5 points)
 
 ```{r}
+set.seed(seed)
 bagofwordsmodel3 <- kknn(spam ~ ., train_bag, test_bag, k=3, distance = 2)
 
 pred_bagb <- bagofwordsmodel3$fitted.value
@@ -118,6 +122,7 @@ The bagofwordsmodel with k=3 would also return False as a Spam email.
 #c)	What target level would a k-NN model with k = 3 and using Manhattan distance return for the same query? (5 points)
 
 ```{r}
+set.seed(seed)
 bagofwordsmodel_manhat <- kknn(spam ~ ., train_bag, test_bag, k=3, distance = 1)
 
 pred_bagc <- bagofwordsmodel_manhat$fitted.value
@@ -151,3 +156,103 @@ numeric_vector <-as.numeric(bool_vector)
 prediction_cos_sim <- ifelse(sum(numeric_vector) >= 2, TRUE, FALSE)
 prediction_cos_sim
 ```
+
+
+#3) Predictive data analytics models are often used as tools for process quality control and fault detection. The task in this question is to create a naive Bayes model to monitor a waste water treatment plant. The table below lists a dataset containing details of activities at a waste water treatment plant for 14 days. Each day is described in terms of six descriptive features that are generated from different sensors at the plant. SS-IN measures the solids coming into the plant per day; SED-IN measures the sediment coming into the plant per day. Features SS-OOUT, SED-OUT, and COND-OUT are the corresponding measurements for the water flowing out of the plant. The target feature, STATUS, reports the current situation at the plant:
+
+#ok, everything is working correctly
+#settler, there is a problem with the plant settler equipment
+#solids, there is a problem with the amount of solids going through the plant
+
+```{r}
+waste_plant <- data.frame(
+  ID = c(1:13),
+  `SS-IN` = c(168, 156, 176, 256, 230, 116, 242,242,174, 1004, 1228, 964, 2008),
+  `SED-IN` = c(3,3,3.5,3,5,3,7,4.5,2.5,35,46,17,32),
+  `COND-IN` = c(1814,1358,2200,2070,1410, 1238,1315,1183,1110,1218,1889,2120,1257),
+  `SS-OUT` = c(15,14,16,27,131,104,104,78,73,81,82.4,20,13),
+  `SED-OUT` = c(0.001, 0.01,0.005,0.2,3.5,0.06,0.01,0.02,1.5,1172,1932,1030,1038),
+  `COND-OUT` = c(1879,1425,2140,2700,1575,1221,1434,1374,11256,33.3,43.1,1966,1289),
+  `STATUS` = c("ok", "ok", "ok", "ok", "settler", "settler", "settler", "settler", "settler", "solids", "solids", "solids", "solids")
+)
+waste_plant
+```
+
+#a)	Create a naive Bayes model that uses probability density functions to model the descriptive features in this dataset (assume that all the descriptive features are normally distributed). Show clearly the distribution of each of the predictors conditional on status and the prior probabilities of the status. (15 points)
+
+```{r}
+#https://www.geeksforgeeks.org/r-language/naive-bayes-classifier-in-r-programming/
+set.seed(seed)
+dim(waste_plant)
+
+#id gives no predictive power
+waste_plant <- waste_plant[,-1]
+
+#FACTOR CLASS
+waste_plant$STATUS <- as.factor(waste_plant$STATUS)
+str(waste_plant$STATUS)
+
+#GET PDFS using tapply:
+
+#SS.IN
+ssin_mean <- tapply(waste_plant$SS.IN, waste_plant$STATUS, mean)
+ssin_sd <-tapply(waste_plant$SS.IN, waste_plant$STATUS, sd)
+#SED.IN
+sedin_mean <- tapply(waste_plant$SED.IN, waste_plant$STATUS, mean)
+sedin_sd <- tapply(waste_plant$SED.IN, waste_plant$STATUS, sd)
+#COND.IN
+condin_mean <- tapply(waste_plant$COND.IN, waste_plant$STATUS, mean)
+condin_sd <- tapply(waste_plant$COND.IN, waste_plant$STATUS, sd)
+#SS.OUT
+ssout_mean <- tapply(waste_plant$SS.OUT, waste_plant$STATUS, mean)
+ssout_sd <- tapply(waste_plant$SS.OUT, waste_plant$STATUS, sd)
+#SED.OUT
+sedout_mean <- tapply(waste_plant$SED.OUT, waste_plant$STATUS, mean)
+sedout_sd <- tapply(waste_plant$SED.OUT, waste_plant$STATUS, sd)
+#COND.OUT
+condout_mean <- tapply(waste_plant$COND.OUT, waste_plant$STATUS, mean)
+condout_sd <- tapply(waste_plant$COND.OUT, waste_plant$STATUS, sd)
+
+prob_dens_func <- cbind(
+  `SS-IN-mean` = ssin_mean,
+  `SS-IN-sd` = ssin_sd,
+  `SED-IN-mean` = sedin_mean,
+  `SED-IN-sd` = sedin_sd,
+  `COND-IN-mean` = condin_mean,
+  `COND-IN-sd` = condin_sd,
+  `SS-OUT-mean` = ssout_mean,
+  `SS-OUT-sd` = ssout_sd,
+  `SED-OUT-mean` = sedout_mean,
+  `SED-OUT-sd` = sedout_sd,
+  `COND-OUT-mean` = condout_mean,
+  `COND-OUT-sd` = condout_sd
+)
+prob_dens_func
+#nrow(waste_plant)
+prior_probs <- table(waste_plant$STATUS) / nrow(waste_plant) * 100
+prior_probs
+
+#Model also shows prior probs and pdfs
+nb_wp <- naiveBayes(STATUS ~ ., waste_plant)
+#nb_wp
+```
+#b)	What prediction will the naive Bayes model return for the following query? SS-IN = 222, SED-IN = 4.5, COND-IN = 1518, SS-OUT = 74, SED-OUT = 0.25, COND-OUT = 1642. (10 points)
+
+```{r}
+nb_func <- function(ssin, sedin, condin, ssout, sedout, condout) {
+  naive_vals<- data.frame(
+    `SS-IN` = ssin,
+    `SED-IN` = sedin,
+    `COND-IN` = condin,
+    `SS-OUT` = ssout,
+    `SED-OUT` = sedout,
+    `COND-OUT` = condout
+  )
+  predict(nb_wp, naive_vals)
+}
+nb_func(222, 4.5, 1518, 74, 0.25, 1642)
+```
+#Settler is what the naive-bayes model predicted on the values given
+
+
+#4. 
