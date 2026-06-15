@@ -6,6 +6,8 @@ output: html_document
 ---
 ```{r}
 library(caret)
+library(kknn)
+library(lsa)
 ```
 
 
@@ -62,4 +64,81 @@ pred_wth
 The differences between the predictions with and without preprocessing occur in the first test sample (9, 4, 15). The without preprocess knn model predicted class A while the preprocess knn model predicted class B.  
 
 
+#2. Email spam filtering problem
 
+```{r}
+train_bag <- data.frame(
+            money = c(3,1,0,0,0),
+            free = c(0,2,0,0,1),
+            `for` = c(0,1,1,1,0),
+            gambling = c(0,1,1,0,0),
+            fun = c(0,1,1,3,0),
+            machine = c(0,0,0,1,1),
+            learning = c(0,0,0,1,1),
+            spam = c(TRUE, TRUE, TRUE, FALSE,  FALSE)
+            )
+#train_bag
+```
+#a)	What target level would a nearest neighbor model using Euclidean distance return for the following email: “machine learning for free”? (10 points)
+
+```{r}
+test_bag <- data.frame(
+  money = 0,
+  free = 1,
+  `for` = 1,
+  gambling = 0,
+  fun = 0,
+  machine = 1,
+  learning = 1
+)
+#test
+```
+
+```{r}
+#made spam a factor
+train_bag$spam<-as.factor(train_bag$spam)
+#train_bag$spam
+
+bagofwordsmodel <- kknn(spam ~ ., train_bag, test_bag, k=1, distance = 2)
+
+#Look up fitted.values for predicting on kknn
+pred_bag <- bagofwordsmodel$fitted.value
+pred_bag
+```
+#b)	What target level would a k-NN model with k = 3 and using Euclidean distance return for the same query? (5 points)
+
+```{r}
+bagofwordsmodel3 <- kknn(spam ~ ., train_bag, test_bag, k=3, distance = 2)
+
+pred_bagb <- bagofwordsmodel3$fitted.value
+pred_bagb
+```
+The bagofwordsmodel with k=3 would also return False as a Spam email.
+
+#c)	What target level would a k-NN model with k = 3 and using Manhattan distance return for the same query? (5 points)
+
+```{r}
+bagofwordsmodel_manhat <- kknn(spam ~ ., train_bag, test_bag, k=3, distance = 1)
+
+pred_bagc <- bagofwordsmodel_manhat$fitted.value
+pred_bagc
+```
+#d)	There are a lot of zero entries in the spam bag-of-words dataset. This is indicative of sparse data and is typical for text analytics. Cosine similarity is often a good choice when dealing with sparse non-binary data. What target level would a 3-NN model using cosine similarity return for the query? (10 points)
+
+
+```{r}
+#https://www.geeksforgeeks.org/r-language/how-to-calculate-cosine-similarity-in-r/
+
+money =  c(3,1,0,0,0)
+free = c(0,2,0,0,1)
+`for` = c(0,1,1,1,0)
+gambling = c(0,1,1,0,0)
+fun = c(0,1,1,3,0)
+machine = c(0,0,0,1,1)
+learning = c(0,0,0,1,1)
+#test
+test_bag_vector <- c(0,1,1,0,0,1,1)
+
+cos_sim <- cbind(money, free, `for`, gambling, fun, machine, learning, test_bag_vector)
+cos_calculations <- cosine(cos_sim)
+```
