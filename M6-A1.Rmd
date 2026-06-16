@@ -254,5 +254,3 @@ nb_func(222, 4.5, 1518, 74, 0.25, 1642)
 ```
 #Settler is what the naive-bayes model predicted on the values given
 
-
-#4. 
